@@ -5,7 +5,7 @@ import {
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
-const fr = (x) => String(x).replace('.', ',');
+const fr = (x) => String(x); // English number format: decimal point
 const state = { mode: null, profile: null, activities: [], selectedId: null, chat: [], charts: {} };
 
 // ---------- Theme for charts (reads CSS tokens so there is one source of truth) ----------
@@ -68,7 +68,7 @@ async function boot() {
   $('app').hidden = false;
   $('demo-banner').hidden = mode !== 'demo';
   $('mode-pill').hidden = false;
-  $('mode-pill').textContent = mode === 'demo' ? 'Démo' : `Strava · ${me.athlete?.firstname || ''}`;
+  $('mode-pill').textContent = mode === 'demo' ? 'Demo' : `Strava · ${me.athlete?.firstname || ''}`;
   $('mode-pill').classList.toggle('live', mode === 'live');
   $('logout-btn').hidden = mode !== 'live';
   initChat();
@@ -77,10 +77,10 @@ async function boot() {
 
 function showLandingNotice(code) {
   const msg = {
-    denied: 'Connexion Strava annulée.',
-    invalid_state: 'Session de connexion expirée, réessaie.',
-    missing_scope: "Autorise l'accès aux activités pour que l'analyse fonctionne.",
-    exchange_failed: "Strava a refusé la connexion. L'app est limitée au compte du propriétaire en mode développeur, explore la démo.",
+    denied: 'Strava login cancelled.',
+    invalid_state: 'Login session expired, please try again.',
+    missing_scope: "Allow access to your activities so the analysis can work.",
+    exchange_failed: "Strava refused the connection. The app is limited to the owner's account in developer mode, try the demo.",
   }[code];
   if (!msg) return;
   const p = document.createElement('p');
@@ -94,7 +94,7 @@ async function loadData() {
   try {
     const r = await fetch(`/api/activities?source=${state.mode}`);
     const data = await r.json();
-    if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`);
+    if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
     state.profile = data.profile;
     state.activities = data.activities;
     $('loading').hidden = true;
@@ -104,7 +104,7 @@ async function loadData() {
   } catch (e) {
     $('loading').hidden = true;
     $('error').hidden = false;
-    $('error').textContent = `Impossible de charger les données: ${e.message}`;
+    $('error').textContent = `Could not load data: ${e.message}`;
   }
 }
 
@@ -118,28 +118,28 @@ function render() {
   const sevenDaysAgo = Date.now() - 7 * 86400000;
   const last7 = acts.filter((a) => isRun(a) && parseLocal(a.start_date_local) >= sevenDaysAgo);
   $('k-vol').textContent = `${fr(km(last7.reduce((s, a) => s + a.distance, 0)))} km`;
-  $('k-vol-sub').textContent = `${last7.length} séance${last7.length > 1 ? 's' : ''} · ${Math.round(last7.reduce((s, a) => s + (a.total_elevation_gain || 0), 0))} m D+`;
+  $('k-vol-sub').textContent = `${last7.length} session${last7.length > 1 ? 's' : ''} · ${Math.round(last7.reduce((s, a) => s + (a.total_elevation_gain || 0), 0))} m gain`;
 
   const acwr = acwrSeries(acts, hrMax, hrRest, 56);
   const now = acwr[acwr.length - 1];
   const st = acwrStatus(now?.ratio);
-  $('k-acwr').textContent = now?.ratio != null ? now.ratio.toFixed(2).replace('.', ',') : '—';
+  $('k-acwr').textContent = now?.ratio != null ? now.ratio.toFixed(2) : '—';
   $('k-acwr-sub').textContent = st.label;
   $('k-acwr-sub').className = `kpi-sub status ${st.level}`;
 
   const trend = efTrend(acts, hrMax);
   const chg = efChange(trend);
-  $('k-ef').textContent = trend.length ? trend.at(-1).rolling.toFixed(2).replace('.', ',') : '—';
-  $('k-ef-sub').textContent = chg == null ? 'pas assez de footings plats' : `${chg > 0 ? '+' : ''}${String(chg).replace('.', ',')} % sur la période`;
+  $('k-ef').textContent = trend.length ? trend.at(-1).rolling.toFixed(2) : '—';
+  $('k-ef-sub').textContent = chg == null ? 'not enough flat easy runs' : `${chg > 0 ? '+' : ''}${chg}% over the period`;
 
   const consec = consecutiveRunDays(acts);
   $('k-consec').textContent = consec;
   const consecSub = $('k-consec-sub');
-  consecSub.textContent = consec >= 3 ? 'max sur 14 j · densité élevée' : 'max sur 14 j';
+  consecSub.textContent = consec >= 3 ? 'max in 14 d · high density' : 'max in 14 d';
   consecSub.className = consec >= 3 ? 'kpi-sub status serious' : 'kpi-sub';
 
   // Weekly volume
-  const label = (iso) => new Date(iso + 'T00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const label = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   draw('c-volume', {
     type: 'bar',
     data: {
@@ -153,8 +153,8 @@ function render() {
     options: {
       scales: { x: { ...gridX, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } }, y: { ...gridY, title: { display: true, text: 'km' } } },
       plugins: { tooltip: { callbacks: {
-        title: (it) => `Semaine du ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (en cours)' : ''}`,
-        label: (it) => { const w = weeks[it.dataIndex]; return [`${fr(w.km)} km · ${fr(w.hours)} h`, `${w.dplus} m D+ · ${w.count} séance${w.count > 1 ? 's' : ''}`]; },
+        title: (it) => `Week of ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (in progress)' : ''}`,
+        label: (it) => { const w = weeks[it.dataIndex]; return [`${fr(w.km)} km · ${fr(w.hours)} h`, `${w.dplus} m gain · ${w.count} session${w.count > 1 ? 's' : ''}`]; },
       } } },
     },
   });
@@ -174,7 +174,7 @@ function render() {
       scales: { x: { ...gridX, ticks: { maxTicksLimit: 5, callback(v) { return label(this.getLabelForValue(v)); } } }, y: gridY },
       plugins: { tooltip: { callbacks: {
         title: (it) => dayStr(trend[it[0].dataIndex].date + 'T12:00:00'),
-        label: (it) => { const p = trend[it.dataIndex]; return it.datasetIndex === 0 ? `EF ${fr(p.ef)} · ${p.pace}/km à ${p.hr} bpm` : `Moyenne glissante ${fr(p.rolling)}`; },
+        label: (it) => { const p = trend[it.dataIndex]; return it.datasetIndex === 0 ? `EF ${fr(p.ef)} · ${p.pace}/km at ${p.hr} bpm` : `Rolling average ${fr(p.rolling)}`; },
       } } },
     },
   });
@@ -194,7 +194,7 @@ function render() {
         band: { from: 0.8, to: 1.3, color: 'rgba(12,163,12,.10)' },
         tooltip: { callbacks: {
           title: (it) => dayStr(series[it[0].dataIndex].date + 'T12:00:00'),
-          label: (it) => { const p = series[it.dataIndex]; return [`Ratio ${fr(p.ratio)} · ${acwrStatus(p.ratio).label}`, `Aiguë ${p.acute} · Chronique ${p.chronic}`]; },
+          label: (it) => { const p = series[it.dataIndex]; return [`Ratio ${fr(p.ratio)} · ${acwrStatus(p.ratio).label}`, `Acute ${p.acute} · Chronic ${p.chronic}`]; },
         } },
       },
     },
@@ -246,7 +246,7 @@ async function openDetail(id) {
     renderZones(streams);
     renderStreamCharts(streams);
   } catch (e) {
-    $('d-zones').textContent = `Streams indisponibles (${e.message}).`;
+    $('d-zones').textContent = `Streams unavailable (${e.message}).`;
   }
 }
 
@@ -254,11 +254,11 @@ function setStats(a, streams) {
   const dec = streams ? decoupling(streams) : null;
   const items = [
     [`${fr(km(a.distance))} km`, 'distance'],
-    [durStr(a.moving_time), 'temps en mouvement'],
-    [`${paceStr(a.average_speed)}/km`, 'allure moyenne'],
-    [a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm` : '—', 'FC moyenne'],
-    [`${Math.round(a.total_elevation_gain || 0)} m`, 'dénivelé positif'],
-    [dec == null ? (streams ? 'n/a' : '…') : `${String(dec).replace('.', ',')} %`, 'découplage Pa:FC'],
+    [durStr(a.moving_time), 'moving time'],
+    [`${paceStr(a.average_speed)}/km`, 'average pace'],
+    [a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm` : '—', 'average HR'],
+    [`${Math.round(a.total_elevation_gain || 0)} m`, 'elevation gain'],
+    [dec == null ? (streams ? 'n/a' : '…') : `${dec}%`, 'Pa:HR decoupling'],
   ];
   const box = $('d-stats');
   box.replaceChildren(...items.map(([v, l]) => {
@@ -274,7 +274,7 @@ function renderZones(streams) {
   const z = timeInZones(streams, state.profile.hrMax);
   const bounds = zoneBounds(state.profile.hrMax);
   const box = $('d-zones');
-  if (!z) { box.textContent = 'Pas de données cardio pour cette séance.'; return; }
+  if (!z) { box.textContent = 'No heart-rate data for this session.'; return; }
   const bar = document.createElement('div'); bar.className = 'zone-bar';
   const legend = document.createElement('div'); legend.className = 'zone-legend';
   z.forEach((x, i) => {
@@ -282,12 +282,12 @@ function renderZones(streams) {
       const seg = document.createElement('div');
       seg.style.flex = x.pct;
       seg.style.background = `var(--z${i + 1})`;
-      seg.title = `Z${i + 1}: ${x.pct} %`;
+      seg.title = `Z${i + 1}: ${x.pct}%`;
       bar.appendChild(seg);
     }
     const item = document.createElement('span');
     item.innerHTML = `<i style="background:var(--z${i + 1})"></i>`;
-    item.append(`Z${i + 1} ${bounds[i].min}-${bounds[i].max} · ${String(x.pct).replace('.', ',')} %`);
+    item.append(`Z${i + 1} ${bounds[i].min}-${bounds[i].max} · ${x.pct}%`);
     legend.appendChild(item);
   });
   box.replaceChildren(bar, legend);
@@ -322,14 +322,14 @@ function renderStreamCharts(streams) {
 // ---------- Chat ----------
 function initChat() {
   addMsg('assistant', state.mode === 'demo'
-    ? "Je suis le coach de l'athlète démo. J'ai sa charge, son efficacité aérobie et ses 15 dernières séances. Décris une séance comme si c'était la tienne, ou pose une question."
-    : 'Connecté à tes données Strava. Raconte ta séance ("bonne sortie ce matin, jambes lourdes au début…") et je retrouve laquelle c\'est.');
+    ? "I'm the demo athlete's coach. I have their training load, aerobic efficiency and last 15 sessions. Describe a session as if it were yours, or ask a question."
+    : 'Connected to your Strava data. Tell me about your session ("good run this morning, heavy legs at the start…") and I\'ll find which one it is.');
   $('chat-form').addEventListener('submit', (e) => { e.preventDefault(); send($('chat-text').value); });
   $('chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('chat-text').value); } });
   $('chat-text').addEventListener('input', (e) => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`; });
   $('chips').addEventListener('click', (e) => { if (e.target.dataset.q) send(e.target.dataset.q); });
   $('d-close').addEventListener('click', () => { $('detail').hidden = true; state.selectedId = null; document.querySelectorAll('.runs tr.sel').forEach((t) => t.classList.remove('sel')); });
-  $('d-ask').addEventListener('click', () => send('Analyse la séance sélectionnée: qualité du travail aérobie, découplage, temps en zones, et ce que je dois en retenir.'));
+  $('d-ask').addEventListener('click', () => send('Analyse the selected session: quality of the aerobic work, decoupling, time in zones, and what I should take away from it.'));
   $('logout-btn').addEventListener('click', async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/'; });
 }
 
@@ -352,7 +352,7 @@ async function send(text) {
     });
     const data = await r.json();
     typing.remove();
-    if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`);
+    if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
     state.chat.push({ role: 'assistant', content: data.reply });
     addMsg('assistant', data.reply);
     if (data.model) $('chat-model').textContent = data.model;

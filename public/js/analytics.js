@@ -22,7 +22,7 @@ export function durStr(sec) {
   return h ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
 }
 export function dayStr(iso) {
-  return parseLocal(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  return parseLocal(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 // ---------- Heart-rate zones (% of HRmax, 5-zone model) ----------
@@ -95,11 +95,11 @@ export function acwrSeries(activities, hrMax, hrRest, days = 56, now = new Date(
 }
 
 export function acwrStatus(r) {
-  if (r == null) return { level: 'neutral', label: 'Historique insuffisant' };
-  if (r < 0.8) return { level: 'warning', label: 'Sous-charge' };
-  if (r <= 1.3) return { level: 'good', label: 'Zone optimale' };
-  if (r <= 1.5) return { level: 'serious', label: 'Charge élevée' };
-  return { level: 'critical', label: 'Risque de blessure' };
+  if (r == null) return { level: 'neutral', label: 'Not enough history' };
+  if (r < 0.8) return { level: 'warning', label: 'Under-loaded' };
+  if (r <= 1.3) return { level: 'good', label: 'Optimal zone' };
+  if (r <= 1.5) return { level: 'serious', label: 'High load' };
+  return { level: 'critical', label: 'Injury risk' };
 }
 
 // ---------- Aerobic efficiency ----------

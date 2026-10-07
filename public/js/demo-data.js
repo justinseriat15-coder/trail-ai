@@ -3,7 +3,7 @@
 // Shape matches the Strava API (SummaryActivity / activity streams) so the
 // exact same analytics code runs on demo and live data.
 
-export const DEMO_PROFILE = { firstname: 'Athlète démo', hrMax: 196, hrRest: 48 };
+export const DEMO_PROFILE = { firstname: 'Demo athlete', hrMax: 196, hrRest: 48 };
 
 function mulberry32(seed) {
   return function () {
@@ -48,17 +48,17 @@ export function demoActivities(now = new Date()) {
         minutes = (42 + 18 * progress) * load + rand() * 6;
         hr = 143 + rand() * 6;
         dplus = 20 + rand() * 60;
-        name = 'Footing Z2';
+        name = 'Easy run Z2';
       } else if (s.kind === 'intervals') {
         minutes = (45 + 10 * progress) * load;
         hr = 158 + rand() * 6;
         dplus = 30 + rand() * 40;
-        name = progress < 0.5 ? 'Fractionné 6×3 min' : 'Seuil 3×10 min';
+        name = progress < 0.5 ? 'Intervals 6×3 min' : 'Threshold 3×10 min';
       } else {
         minutes = (65 + 70 * progress) * load + rand() * 10;
         hr = 146 + rand() * 7;
         dplus = (250 + 650 * progress) * load + rand() * 80;
-        name = 'Sortie longue trail';
+        name = 'Long trail run';
       }
       const climbPenalty = Math.min(dplus / (minutes / 6) / 60, 0.12); // hills slow you down
       const ef = efBase * (s.kind === 'intervals' ? 1.06 : 1) * (1 - climbPenalty) * (0.97 + rand() * 0.06);

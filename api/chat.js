@@ -24,7 +24,7 @@ function validate(messages) {
 }
 
 export default handler(['POST'], async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) return json(res, 503, { error: 'Coach IA non configuré (ANTHROPIC_API_KEY manquante).' });
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 503, { error: 'AI coach not configured (ANTHROPIC_API_KEY missing).' });
   const body = await readJson(req);
   const source = body.source === 'live' ? 'live' : 'demo';
   const messages = validate(body.messages);
@@ -34,9 +34,9 @@ export default handler(['POST'], async (req, res) => {
   const rl = ctx.mode === 'demo'
     ? rateLimit(`demo:${ip}`, { limit: 15, windowMs: 3600_000 })
     : rateLimit(`live:${ctx.athlete?.id}`, { limit: 80, windowMs: 3600_000 });
-  if (!rl.ok) return json(res, 429, { error: `Limite atteinte, réessaie dans ${Math.ceil(rl.retryAfter / 60)} min.` });
+  if (!rl.ok) return json(res, 429, { error: `Limit reached, try again in ${Math.ceil(rl.retryAfter / 60)} min.` });
   if (ctx.mode === 'demo' && !rateLimit('demo:global', { limit: 300, windowMs: 86400_000 }).ok) {
-    return json(res, 429, { error: 'Quota quotidien de la démo atteint.' });
+    return json(res, 429, { error: 'Daily demo quota reached.' });
   }
 
   let streams = null;
@@ -65,7 +65,7 @@ export default handler(['POST'], async (req, res) => {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     console.error('Anthropic error', r.status, data?.error?.type);
-    return json(res, 502, { error: 'Le coach IA est indisponible pour le moment.' });
+    return json(res, 502, { error: 'The AI coach is currently unavailable.' });
   }
   const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
   json(res, 200, { reply: text, model, usage: data.usage });

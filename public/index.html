@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Trail.AI — Endurance analytics</title>
-<meta name="description" content="Analyse d'entraînement trail sur données Strava: efficacité aérobie, charge (ACWR), découplage cardiaque, et un coach IA ancré dans ces métriques.">
+<meta name="description" content="Trail running training analytics on Strava data: aerobic efficiency, training load (ACWR), cardiac decoupling, and an AI coach grounded in those metrics.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
@@ -17,7 +17,7 @@
   <a class="logo" href="/">TRAIL<span>.</span>AI</a>
   <div class="topbar-right">
     <span class="mode-pill" id="mode-pill" hidden></span>
-    <button class="btn-ghost" id="logout-btn" hidden>Déconnexion</button>
+    <button class="btn-ghost" id="logout-btn" hidden>Log out</button>
   </div>
 </header>
 
@@ -25,96 +25,96 @@
 <main id="landing" class="landing" hidden>
   <section class="hero">
     <p class="eyebrow">Endurance analytics · Strava · Claude</p>
-    <h1>Ton entraînement,<br><span>lu comme un coach.</span></h1>
-    <p class="lede">Trail.AI transforme les données Strava en indicateurs de physiologie de l'endurance, puis donne à un coach IA uniquement ces chiffres calculés. Tu écris "jambes lourdes ce matin", il retrouve la séance, la croise avec ta charge et répond.</p>
+    <h1>Your training,<br><span>read like a coach.</span></h1>
+    <p class="lede">Trail.AI turns Strava data into endurance physiology metrics, then gives an AI coach only those computed numbers. You write "heavy legs this morning", it finds the session, cross-checks it against your load and answers.</p>
     <div class="cta-row">
-      <a class="btn-primary" href="/?mode=demo">Explorer la démo</a>
-      <a class="btn-secondary" href="/api/auth/login">Connecter Strava</a>
+      <a class="btn-primary" href="/?mode=demo">Explore the demo</a>
+      <a class="btn-secondary" href="/api/auth/login">Connect Strava</a>
     </div>
-    <p class="fineprint">La démo tourne sur un athlète fictif (16 semaines de données synthétiques réalistes). La connexion Strava est réservée au propriétaire tant que l'app est en mode développeur Strava.</p>
+    <p class="fineprint">The demo runs on a fictional athlete (16 weeks of realistic synthetic data). Strava login is limited to the owner while the app is in Strava developer mode.</p>
   </section>
 
   <section class="features">
     <article>
-      <h3>Efficacité aérobie</h3>
-      <p>Efficiency Factor (m/min par battement) sur les footings plats comparables. Il mesure la progression de l'endurance de base, indépendamment de l'allure du jour.</p>
+      <h3>Aerobic efficiency</h3>
+      <p>Efficiency Factor (m/min per heartbeat) on comparable flat easy runs. It tracks base endurance progress, independent of the day's pace.</p>
     </article>
     <article>
-      <h3>Charge et risque</h3>
-      <p>TRIMP de Banister puis ratio de charge aiguë/chronique (ACWR). Il détecte les hausses de charge trop brutales, cause n°1 des blessures de surcharge.</p>
+      <h3>Load and risk</h3>
+      <p>Banister TRIMP, then acute:chronic workload ratio (ACWR). It flags load spikes that are too sudden, the #1 cause of overuse injuries.</p>
     </article>
     <article>
-      <h3>Découplage cardiaque</h3>
-      <p>Analyse seconde par seconde: dérive de la FC à allure constante (Pa:FC) et temps en zones, calculés sur les streams Strava.</p>
+      <h3>Cardiac decoupling</h3>
+      <p>Second-by-second analysis: HR drift at constant pace (Pa:HR) and time in zones, computed from Strava streams.</p>
     </article>
     <article>
-      <h3>Coach IA ancré</h3>
-      <p>Le modèle ne voit que des métriques calculées côté serveur, jamais des données envoyées par le navigateur. Chaque conseil cite ses chiffres.</p>
+      <h3>Grounded AI coach</h3>
+      <p>The model only sees metrics computed server-side, never data sent by the browser. Every piece of advice cites its numbers.</p>
     </article>
   </section>
 
   <section class="arch">
     <h2>Architecture</h2>
-    <div class="arch-flow" role="img" aria-label="Navigateur vers fonctions serverless Vercel, qui appellent l'API Strava et l'API Claude">
-      <div class="arch-node"><b>Navigateur</b><span>UI statique, aucun secret, aucun token</span></div>
+    <div class="arch-flow" role="img" aria-label="Browser to Vercel serverless functions, which call the Strava API and the Claude API">
+      <div class="arch-node"><b>Browser</b><span>Static UI, no secrets, no tokens</span></div>
       <div class="arch-arrow">→</div>
-      <div class="arch-node accent"><b>Vercel Functions</b><span>OAuth + session chiffrée AES-GCM · moteur d'analytics · prompt builder · rate limiting</span></div>
+      <div class="arch-node accent"><b>Vercel Functions</b><span>OAuth + AES-GCM encrypted session · analytics engine · prompt builder · rate limiting</span></div>
       <div class="arch-arrow">→</div>
-      <div class="arch-node"><b>Strava API</b><span>activités + streams</span><b class="mt">Claude API</b><span>raisonnement du coach</span></div>
+      <div class="arch-node"><b>Strava API</b><span>activities + streams</span><b class="mt">Claude API</b><span>coach reasoning</span></div>
     </div>
   </section>
 
-  <footer class="foot">Conçu et développé par Justin Seriat · <a href="https://github.com/" id="repo-link" target="_blank" rel="noopener">Code source</a></footer>
+  <footer class="foot">Designed and built by Justin Seriat · <a href="https://github.com/justinseriat15-coder/trail-ai" id="repo-link" target="_blank" rel="noopener">Source code</a></footer>
 </main>
 
 <!-- ============ DASHBOARD ============ -->
 <main id="app" class="app" hidden>
-  <div class="demo-banner" id="demo-banner" hidden>Mode démo, athlète fictif. Toutes les métriques et le coach IA fonctionnent comme en conditions réelles. <a href="/">Retour</a></div>
+  <div class="demo-banner" id="demo-banner" hidden>Demo mode, fictional athlete. All metrics and the AI coach work exactly as with real data. <a href="/">Back</a></div>
 
   <div class="grid">
     <section class="col-data">
-      <div class="loading" id="loading"><div class="spinner"></div><span>Chargement des séances…</span></div>
+      <div class="loading" id="loading"><div class="spinner"></div><span>Loading sessions…</span></div>
       <div id="data" hidden>
 
         <div class="kpis">
-          <div class="kpi"><div class="kpi-label">Volume 7 j</div><div class="kpi-value" id="k-vol">—</div><div class="kpi-sub" id="k-vol-sub"></div></div>
+          <div class="kpi"><div class="kpi-label">7-day volume</div><div class="kpi-value" id="k-vol">—</div><div class="kpi-sub" id="k-vol-sub"></div></div>
           <div class="kpi"><div class="kpi-label">ACWR</div><div class="kpi-value" id="k-acwr">—</div><div class="kpi-sub status" id="k-acwr-sub"></div></div>
-          <div class="kpi"><div class="kpi-label">Efficacité aérobie</div><div class="kpi-value" id="k-ef">—</div><div class="kpi-sub" id="k-ef-sub"></div></div>
-          <div class="kpi"><div class="kpi-label">Jours consécutifs</div><div class="kpi-value" id="k-consec">—</div><div class="kpi-sub" id="k-consec-sub">max sur 14 j</div></div>
+          <div class="kpi"><div class="kpi-label">Aerobic efficiency</div><div class="kpi-value" id="k-ef">—</div><div class="kpi-sub" id="k-ef-sub"></div></div>
+          <div class="kpi"><div class="kpi-label">Consecutive days</div><div class="kpi-value" id="k-consec">—</div><div class="kpi-sub" id="k-consec-sub">max in 14 d</div></div>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Volume hebdomadaire</h2><span class="card-note">km course · 12 semaines</span></div>
-          <div class="chart-box"><canvas id="c-volume" aria-label="Volume hebdomadaire en kilomètres"></canvas></div>
+          <div class="card-head"><h2>Weekly volume</h2><span class="card-note">running km · 12 weeks</span></div>
+          <div class="chart-box"><canvas id="c-volume" aria-label="Weekly volume in kilometres"></canvas></div>
         </div>
 
         <div class="two">
           <div class="card">
-            <div class="card-head"><h2>Efficiency Factor</h2><span class="card-note">footings plats ≥ 20 min</span></div>
-            <div class="chart-box sm"><canvas id="c-ef" aria-label="Évolution de l'efficiency factor"></canvas></div>
-            <p class="card-foot">m/min par bpm. Points: séances. Ligne: moyenne glissante sur 4 séances.</p>
+            <div class="card-head"><h2>Efficiency Factor</h2><span class="card-note">flat easy runs ≥ 20 min</span></div>
+            <div class="chart-box sm"><canvas id="c-ef" aria-label="Efficiency factor over time"></canvas></div>
+            <p class="card-foot">m/min per bpm. Dots: sessions. Line: 4-session rolling average.</p>
           </div>
           <div class="card">
-            <div class="card-head"><h2>Charge aiguë / chronique</h2><span class="card-note">8 semaines</span></div>
-            <div class="chart-box sm"><canvas id="c-acwr" aria-label="Ratio de charge aiguë sur chronique"></canvas></div>
-            <p class="card-foot">Bande verte: 0,8 à 1,3. Au-delà de 1,5, risque de blessure accru.</p>
+            <div class="card-head"><h2>Acute / chronic load</h2><span class="card-note">8 weeks</span></div>
+            <div class="chart-box sm"><canvas id="c-acwr" aria-label="Acute to chronic load ratio"></canvas></div>
+            <p class="card-foot">Green band: 0.8 to 1.3. Above 1.5, injury risk is elevated.</p>
           </div>
         </div>
 
         <div class="card" id="detail" hidden>
-          <div class="card-head"><h2 id="d-title">Séance</h2><button class="btn-ghost sm" id="d-close" aria-label="Fermer le détail">Fermer</button></div>
+          <div class="card-head"><h2 id="d-title">Session</h2><button class="btn-ghost sm" id="d-close" aria-label="Close details">Close</button></div>
           <div class="detail-stats" id="d-stats"></div>
           <div class="zones" id="d-zones"></div>
-          <div class="chart-box sm"><canvas id="c-hr" aria-label="Fréquence cardiaque au fil de la séance"></canvas></div>
-          <div class="chart-box xs"><canvas id="c-pace" aria-label="Allure au fil de la séance"></canvas></div>
-          <button class="btn-secondary sm" id="d-ask">Demander l'analyse au coach</button>
+          <div class="chart-box sm"><canvas id="c-hr" aria-label="Heart rate over the session"></canvas></div>
+          <div class="chart-box xs"><canvas id="c-pace" aria-label="Pace over the session"></canvas></div>
+          <button class="btn-secondary sm" id="d-ask">Ask the coach for an analysis</button>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Séances récentes</h2><span class="card-note">clique pour l'analyse détaillée</span></div>
+          <div class="card-head"><h2>Recent sessions</h2><span class="card-note">click for detailed analysis</span></div>
           <div class="table-wrap">
             <table class="runs">
-              <thead><tr><th>Date</th><th>Séance</th><th class="r">km</th><th class="r">Allure</th><th class="r">FC</th><th class="r">D+</th><th class="r">EF</th></tr></thead>
+              <thead><tr><th>Date</th><th>Session</th><th class="r">km</th><th class="r">Pace</th><th class="r">HR</th><th class="r">Elev.</th><th class="r">EF</th></tr></thead>
               <tbody id="runs"></tbody>
             </table>
           </div>
@@ -123,19 +123,19 @@
       <div class="error-box" id="error" hidden></div>
     </section>
 
-    <a class="coach-fab" href="#coach">Coach IA</a>
+    <a class="coach-fab" href="#coach">AI Coach</a>
     <aside class="col-chat" id="coach">
-      <div class="chat-head"><span class="dot"></span>Coach IA <span class="chat-model" id="chat-model"></span></div>
+      <div class="chat-head"><span class="dot"></span>AI Coach <span class="chat-model" id="chat-model"></span></div>
       <div class="chat-log" id="chat-log" aria-live="polite"></div>
       <div class="chips" id="chips">
-        <button data-q="Analyse ma dernière séance">Dernière séance</button>
-        <button data-q="Ma charge actuelle est-elle cohérente ? Risque de blessure ?">Charge et risque</button>
-        <button data-q="Est-ce que mon endurance aérobie progresse ? Appuie-toi sur l'EF.">Progression aérobie</button>
-        <button data-q="Propose ma semaine prochaine en fonction de ma charge actuelle.">Semaine prochaine</button>
+        <button data-q="Analyse my latest session">Latest session</button>
+        <button data-q="Is my current load consistent? Any injury risk?">Load and risk</button>
+        <button data-q="Is my aerobic endurance improving? Base it on EF.">Aerobic progress</button>
+        <button data-q="Plan my next week based on my current load.">Next week</button>
       </div>
       <form class="chat-input" id="chat-form">
-        <textarea id="chat-text" rows="1" maxlength="2000" placeholder="Raconte ta séance…" aria-label="Message au coach"></textarea>
-        <button type="submit" id="chat-send" aria-label="Envoyer">
+        <textarea id="chat-text" rows="1" maxlength="2000" placeholder="Tell me about your session…" aria-label="Message to the coach"></textarea>
+        <button type="submit" id="chat-send" aria-label="Send">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 21 3l-8.5 18-2-7.5z"/></svg>
         </button>
       </form>
