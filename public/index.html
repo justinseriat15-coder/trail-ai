@@ -7,7 +7,7 @@
 <meta name="description" content="Trail running training analytics on Strava data: aerobic efficiency, training load (ACWR), cardiac decoupling, and an AI coach grounded in those metrics.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a19'/%3E%3Cpath d='M5 24 L13 10 L18 18 L21 14 L27 24 Z' fill='%23ff5a1f'/%3E%3C/svg%3E">
 </head>
@@ -24,47 +24,93 @@
 <!-- ============ LANDING ============ -->
 <main id="landing" class="landing" hidden>
   <section class="hero">
-    <p class="eyebrow">Endurance analytics · Strava · Claude</p>
-    <h1>Your training,<br><span>read like a coach.</span></h1>
-    <p class="lede">Trail.AI turns Strava data into endurance physiology metrics, then gives an AI coach only those computed numbers. You write "heavy legs this morning", it finds the session, cross-checks it against your load and answers.</p>
-    <div class="cta-row">
-      <a class="btn-primary" href="/?mode=demo">Explore the demo</a>
-      <a class="btn-secondary" href="/api/auth/login">Connect Strava</a>
+    <svg class="topo" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M1020,120 L1019,123 L1017,126 L1014,128 L1010,130 L1006,131 L1003,132 L1000,134 L998,135 L997,137 L995,139 L993,142 L991,145 L988,147 L984,148 L980,149 L976,149 L972,148 L968,148 L964,146 L961,145 L957,143 L954,141 L951,139 L949,136 L948,133 L949,130 L949,127 L951,125 L952,122 L953,120 L952,118 L952,116 L951,113 L949,110 L949,107 L949,103 L950,100 L953,98 L956,96 L961,95 L965,95 L969,95 L973,95 L976,95 L980,95 L984,95 L987,95 L991,96 L994,96 L997,98 L1000,99 L1003,101 L1005,103 L1008,105 L1010,107 L1013,109 L1016,111 L1018,114 L1020,117 L1020,120Z"/><path d="M1061,120 L1059,126 L1054,132 L1047,136 L1040,140 L1032,142 L1026,145 L1021,147 L1017,150 L1014,155 L1011,159 L1007,165 L1002,170 L995,174 L988,176 L980,178 L972,178 L964,177 L956,175 L948,173 L941,170 L934,167 L927,163 L922,159 L919,153 L917,147 L917,141 L919,135 L922,129 L924,124 L925,120 L925,116 L923,111 L920,106 L918,100 L917,93 L917,86 L921,80 L926,76 L933,72 L942,71 L950,70 L958,70 L966,70 L973,70 L980,70 L987,70 L994,70 L1001,71 L1008,73 L1014,76 L1020,79 L1025,83 L1030,87 L1035,90 L1040,94 L1046,98 L1052,103 L1057,108 L1060,114 L1061,120Z"/><path d="M1102,120 L1098,129 L1090,137 L1080,144 L1069,149 L1058,153 L1049,157 L1041,161 L1036,166 L1031,172 L1027,180 L1021,188 L1013,195 L1003,200 L992,204 L980,206 L968,206 L956,204 L944,202 L932,199 L921,196 L910,191 L900,186 L893,178 L888,170 L886,160 L887,151 L890,142 L894,134 L897,126 L898,120 L897,114 L894,106 L890,98 L886,89 L884,79 L886,69 L891,61 L900,54 L911,49 L923,47 L935,46 L947,45 L958,45 L969,45 L980,44 L991,44 L1002,45 L1012,46 L1022,50 L1031,54 L1039,59 L1047,65 L1054,71 L1062,76 L1071,81 L1080,87 L1089,94 L1096,102 L1101,111 L1102,120Z"/><path d="M1142,120 L1137,132 L1126,143 L1112,152 L1097,159 L1083,164 L1071,169 L1062,175 L1055,182 L1049,191 L1043,201 L1034,211 L1024,220 L1011,226 L996,231 L980,233 L964,233 L948,232 L932,229 L916,226 L901,222 L886,216 L873,208 L863,198 L857,186 L855,174 L857,161 L861,149 L867,138 L870,129 L871,120 L869,111 L864,102 L858,91 L853,78 L851,65 L854,52 L862,41 L874,32 L888,27 L904,23 L921,21 L936,20 L951,20 L966,19 L980,18 L995,18 L1009,19 L1023,22 L1036,27 L1048,33 L1058,40 L1068,47 L1078,55 L1089,61 L1101,68 L1114,76 L1127,85 L1137,95 L1142,107 L1142,120Z"/><path d="M1183,120 L1175,135 L1161,148 L1143,159 L1125,168 L1108,175 L1094,181 L1084,189 L1075,198 L1068,210 L1059,222 L1048,234 L1035,244 L1018,252 L1000,258 L980,260 L960,260 L940,259 L920,257 L900,253 L880,248 L861,241 L845,231 L833,218 L826,203 L824,187 L828,170 L833,155 L840,142 L844,131 L844,120 L840,109 L833,97 L826,83 L820,67 L819,51 L823,35 L833,22 L848,11 L867,4 L886,-0 L906,-3 L925,-5 L944,-6 L962,-8 L980,-9 L998,-9 L1016,-7 L1034,-3 L1050,4 L1064,12 L1077,21 L1089,30 L1102,39 L1117,47 L1133,55 L1149,64 L1165,75 L1177,89 L1184,104 L1183,120Z"/><path d="M1223,120 L1212,138 L1195,154 L1174,167 L1152,177 L1133,185 L1117,194 L1105,204 L1096,215 L1087,229 L1076,243 L1062,257 L1045,269 L1025,278 L1003,283 L980,286 L956,287 L932,286 L908,284 L883,281 L859,275 L836,267 L817,254 L803,238 L795,219 L794,199 L799,180 L806,162 L813,146 L817,133 L817,120 L811,107 L802,92 L793,75 L787,56 L786,37 L792,19 L805,3 L823,-9 L845,-18 L868,-23 L892,-27 L914,-30 L936,-32 L958,-35 L980,-37 L1002,-36 L1024,-33 L1045,-27 L1063,-18 L1080,-8 L1095,3 L1110,13 L1126,23 L1144,32 L1164,41 L1185,52 L1204,66 L1218,82 L1225,101 L1223,120Z"/><path d="M1263,120 L1249,141 L1228,159 L1204,174 L1179,186 L1158,196 L1141,206 L1128,218 L1117,233 L1106,249 L1093,265 L1076,280 L1056,293 L1032,303 L1007,309 L980,312 L953,313 L925,313 L896,312 L866,309 L838,303 L811,293 L788,278 L773,258 L765,236 L765,212 L771,189 L780,168 L787,150 L791,135 L788,120 L781,104 L770,87 L759,67 L753,45 L753,23 L761,2 L777,-16 L799,-29 L824,-39 L851,-46 L877,-51 L903,-55 L929,-59 L954,-63 L980,-64 L1006,-64 L1031,-59 L1055,-51 L1076,-40 L1095,-28 L1113,-15 L1130,-4 L1150,7 L1172,17 L1197,27 L1222,40 L1244,57 L1260,76 L1267,98 L1263,120Z"/><path d="M1302,120 L1285,144 L1261,164 L1233,181 L1206,195 L1183,207 L1165,219 L1150,234 L1138,250 L1126,268 L1110,287 L1090,304 L1066,317 L1039,327 L1010,334 L980,338 L949,340 L917,341 L883,341 L849,338 L816,331 L785,319 L760,301 L743,278 L735,252 L737,224 L744,198 L753,175 L761,154 L764,137 L760,120 L750,102 L737,82 L725,59 L719,34 L720,9 L731,-14 L750,-34 L775,-49 L803,-60 L833,-68 L863,-75 L892,-81 L921,-87 L950,-91 L980,-93 L1010,-91 L1039,-85 L1065,-75 L1089,-61 L1110,-47 L1130,-33 L1151,-20 L1174,-9 L1201,1 L1230,13 L1259,28 L1284,47 L1301,69 L1308,94 L1302,120Z"/><path d="M1340,120 L1321,147 L1293,169 L1262,188 L1233,203 L1208,218 L1189,233 L1174,249 L1160,268 L1145,289 L1127,309 L1104,326 L1077,341 L1046,351 L1014,358 L980,363 L945,366 L909,369 L871,369 L832,367 L793,359 L759,345 L732,324 L714,298 L706,267 L709,236 L717,207 L728,181 L735,159 L737,139 L730,120 L718,100 L704,76 L691,50 L685,23 L688,-5 L701,-30 L723,-51 L751,-68 L783,-81 L815,-91 L848,-100 L880,-108 L913,-115 L946,-120 L980,-121 L1014,-118 L1046,-110 L1075,-98 L1101,-82 L1125,-66 L1147,-50 L1171,-37 L1198,-26 L1230,-14 L1264,-1 L1297,16 L1325,37 L1343,63 L1348,91 L1340,120Z"/><path d="M303,330 L300,333 L297,336 L294,338 L292,340 L290,343 L289,346 L288,349 L287,352 L285,356 L282,359 L279,361 L274,363 L270,363 L265,363 L260,362 L256,361 L252,359 L248,358 L244,356 L241,355 L237,353 L235,351 L233,348 L231,346 L230,343 L229,340 L228,338 L226,335 L223,333 L220,330 L217,327 L215,323 L214,319 L214,315 L216,311 L220,308 L225,307 L230,306 L236,305 L241,305 L245,305 L249,305 L253,304 L256,304 L260,303 L264,303 L268,303 L272,303 L276,304 L279,305 L283,307 L286,308 L290,310 L294,312 L298,314 L301,316 L304,319 L305,323 L305,327 L303,330Z"/><path d="M345,330 L339,336 L333,342 L327,346 L323,351 L320,356 L318,361 L317,368 L314,375 L311,382 L305,388 L297,392 L289,395 L279,396 L269,395 L260,393 L251,391 L243,389 L235,386 L228,383 L221,380 L214,376 L209,372 L205,366 L203,361 L201,355 L199,350 L196,345 L192,341 L187,336 L180,330 L174,323 L169,316 L167,308 L168,300 L173,293 L181,287 L190,284 L201,282 L212,281 L221,280 L230,280 L238,279 L245,278 L252,277 L260,275 L268,275 L276,275 L283,277 L291,279 L298,282 L305,284 L312,287 L320,290 L328,293 L336,297 L343,303 L348,309 L350,316 L349,323 L345,330Z"/><path d="M386,330 L378,339 L369,347 L360,354 L354,361 L350,369 L348,377 L346,387 L342,398 L336,408 L328,417 L316,423 L302,427 L288,428 L274,427 L260,425 L247,422 L235,418 L223,415 L211,411 L201,406 L191,400 L184,393 L178,384 L175,376 L172,368 L169,360 L165,353 L158,346 L149,339 L139,330 L130,320 L123,308 L120,296 L122,285 L130,274 L142,266 L157,261 L172,258 L188,257 L202,256 L215,255 L226,253 L237,251 L249,249 L260,248 L272,247 L283,249 L295,251 L306,254 L316,258 L327,262 L338,265 L351,269 L364,274 L376,281 L386,289 L393,298 L395,309 L393,320 L386,330Z"/><path d="M427,330 L415,342 L404,353 L393,362 L386,372 L382,382 L379,394 L376,407 L371,421 L362,434 L350,445 L334,453 L316,458 L297,459 L278,458 L260,456 L243,452 L226,449 L210,444 L194,439 L180,432 L168,424 L158,414 L152,402 L148,391 L144,380 L140,370 L133,360 L124,351 L111,342 L98,330 L85,316 L76,301 L72,285 L76,269 L87,256 L103,246 L123,239 L144,235 L164,232 L183,231 L199,229 L215,227 L230,224 L245,221 L260,220 L276,220 L291,222 L306,226 L320,230 L334,235 L349,239 L365,244 L382,249 L399,255 L416,263 L429,274 L437,287 L440,302 L436,316 L427,330Z"/><path d="M467,330 L452,345 L438,358 L426,370 L418,382 L413,396 L410,411 L406,428 L399,445 L388,461 L372,474 L352,483 L330,489 L306,490 L283,489 L260,487 L238,483 L217,479 L197,475 L177,468 L159,459 L145,448 L133,434 L126,419 L121,405 L117,391 L111,379 L102,368 L89,357 L73,345 L55,330 L39,313 L28,293 L25,273 L31,254 L45,238 L66,226 L91,217 L116,212 L141,208 L163,206 L184,203 L203,199 L221,196 L241,193 L260,192 L279,193 L298,196 L317,201 L334,207 L352,212 L371,217 L391,222 L413,228 L436,235 L456,246 L473,260 L482,277 L484,295 L478,313 L467,330Z"/><path d="M506,330 L488,348 L472,363 L459,378 L450,393 L446,409 L442,428 L437,448 L428,469 L414,487 L394,502 L370,513 L343,518 L315,520 L287,520 L260,518 L234,515 L208,511 L183,505 L160,497 L138,486 L121,471 L109,454 L101,436 L95,419 L90,403 L83,388 L71,375 L54,362 L33,348 L11,330 L-8,309 L-20,286 L-22,262 L-14,240 L4,220 L29,206 L59,196 L89,189 L117,184 L143,180 L167,176 L190,171 L213,167 L236,164 L260,164 L283,166 L306,171 L327,177 L348,184 L370,189 L393,195 L418,200 L446,206 L473,215 L498,228 L517,245 L527,266 L528,288 L520,310 L506,330Z"/><path d="M544,330 L524,351 L506,369 L492,386 L484,404 L479,424 L475,446 L469,469 L457,492 L440,513 L416,530 L387,541 L356,548 L323,550 L291,550 L260,549 L229,547 L199,543 L169,537 L142,527 L118,513 L98,495 L85,474 L76,453 L70,432 L64,414 L55,398 L40,383 L18,368 L-7,351 L-33,330 L-55,305 L-68,278 L-69,251 L-58,225 L-36,203 L-7,186 L27,174 L61,166 L93,160 L123,154 L151,149 L178,143 L205,138 L232,136 L260,136 L287,140 L313,146 L337,154 L362,161 L387,167 L415,172 L446,177 L478,184 L511,195 L540,210 L561,231 L571,255 L571,281 L561,307 L544,330Z"/></svg>
+    <div class="hero-text">
+      <h1>Your training,<br>read like a coach.</h1>
+      <p class="lede">Trail.AI turns your Strava runs into endurance metrics, then hands only those numbers to an AI coach. Write “heavy legs yesterday” and it finds the session, checks it against your load and tells you what to do next.</p>
+      <div class="cta-row">
+        <a class="btn-primary" href="/?mode=demo">Explore the demo</a>
+        <a class="btn-secondary" href="/api/auth/login">Connect Strava</a>
+      </div>
+      <p class="fineprint">The demo uses a fictional athlete with 16 weeks of realistic data. Strava login is limited to the owner while the app is in Strava developer mode.</p>
     </div>
-    <p class="fineprint">The demo runs on a fictional athlete (16 weeks of realistic synthetic data). Strava login is limited to the owner while the app is in Strava developer mode.</p>
+    <figure class="profile" aria-label="Elevation profile of a 21 km trail run with heart-rate annotations">
+      <svg viewBox="0 0 1200 240" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="pf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5a1f" stop-opacity=".28"/><stop offset="1" stop-color="#ff5a1f" stop-opacity="0"/></linearGradient></defs>
+        <path class="pf-area" d="M0.0,209.1 L4.0,205.3 L8.0,202.0 L12.0,199.7 L16.0,198.7 L20.0,198.9 L24.0,200.2 L28.0,202.2 L32.0,204.4 L36.0,206.4 L40.0,207.7 L44.0,208.2 L48.0,207.8 L52.0,206.9 L56.0,205.7 L60.0,204.7 L64.0,204.3 L68.0,204.9 L72.0,206.5 L76.0,208.9 L80.0,212.0 L84.0,215.1 L88.0,217.8 L92.0,219.5 L96.0,220.0 L100.0,219.1 L104.0,216.8 L108.0,213.5 L112.0,209.8 L116.0,206.1 L120.0,202.9 L124.0,200.6 L128.0,199.4 L132.0,199.1 L136.0,199.6 L140.0,200.3 L144.0,201.0 L148.0,201.0 L152.0,200.2 L156.0,198.6 L160.0,196.2 L164.0,193.5 L168.0,190.9 L172.0,188.7 L176.0,187.6 L180.0,187.6 L184.0,188.7 L188.0,190.8 L192.0,193.3 L196.0,195.9 L200.0,197.8 L204.0,198.7 L208.0,198.2 L212.0,196.4 L216.0,193.3 L220.0,189.4 L224.0,185.1 L228.0,181.0 L232.0,177.3 L236.0,174.5 L240.0,172.5 L244.0,171.1 L248.0,170.0 L252.0,168.8 L256.0,167.0 L260.0,164.3 L264.0,160.6 L268.0,156.0 L272.0,150.8 L276.0,145.4 L280.0,140.4 L284.0,136.2 L288.0,133.3 L292.0,131.8 L296.0,131.5 L300.0,132.3 L304.0,133.7 L308.0,135.1 L312.0,135.9 L316.0,135.9 L320.0,134.9 L324.0,132.8 L328.0,129.9 L332.0,126.7 L336.0,123.6 L340.0,121.0 L344.0,119.2 L348.0,118.4 L352.0,118.4 L356.0,118.9 L360.0,119.6 L364.0,119.9 L368.0,119.4 L372.0,117.9 L376.0,115.4 L380.0,112.1 L384.0,108.3 L388.0,104.7 L392.0,101.6 L396.0,99.7 L400.0,99.3 L404.0,100.3 L408.0,102.7 L412.0,106.1 L416.0,110.0 L420.0,113.9 L424.0,117.3 L428.0,120.0 L432.0,121.9 L436.0,123.1 L440.0,123.9 L444.0,124.8 L448.0,126.1 L452.0,128.3 L456.0,131.4 L460.0,135.4 L464.0,140.1 L468.0,145.0 L472.0,149.7 L476.0,153.5 L480.0,156.1 L484.0,157.4 L488.0,157.4 L492.0,156.3 L496.0,154.6 L500.0,152.9 L504.0,151.6 L508.0,151.1 L512.0,151.8 L516.0,153.5 L520.0,156.1 L524.0,159.1 L528.0,162.2 L532.0,164.7 L536.0,166.4 L540.0,167.1 L544.0,167.0 L548.0,166.1 L552.0,165.0 L556.0,164.2 L560.0,163.9 L564.0,164.4 L568.0,165.9 L572.0,168.2 L576.0,170.8 L580.0,173.3 L584.0,175.1 L588.0,175.8 L592.0,174.9 L596.0,172.4 L600.0,168.4 L604.0,163.3 L608.0,157.5 L612.0,151.6 L616.0,146.0 L620.0,141.1 L624.0,137.0 L628.0,133.6 L632.0,130.6 L636.0,127.6 L640.0,124.1 L644.0,119.9 L648.0,114.8 L652.0,108.7 L656.0,101.9 L660.0,94.8 L664.0,87.9 L668.0,81.8 L672.0,76.8 L676.0,73.1 L680.0,70.8 L684.0,69.7 L688.0,69.2 L692.0,69.0 L696.0,68.4 L700.0,67.1 L704.0,64.8 L708.0,61.5 L712.0,57.4 L716.0,53.0 L720.0,48.7 L724.0,45.0 L728.0,42.2 L732.0,40.6 L736.0,40.2 L740.0,40.7 L744.0,41.8 L748.0,43.0 L752.0,43.9 L756.0,44.2 L760.0,43.7 L764.0,42.7 L768.0,41.4 L772.0,40.3 L776.0,40.0 L780.0,40.9 L784.0,43.3 L788.0,47.3 L792.0,52.9 L796.0,59.7 L800.0,67.2 L804.0,74.8 L808.0,82.0 L812.0,88.5 L816.0,94.0 L820.0,98.6 L824.0,102.6 L828.0,106.3 L832.0,110.1 L836.0,114.4 L840.0,119.5 L844.0,125.3 L848.0,131.7 L852.0,138.3 L856.0,144.6 L860.0,150.1 L864.0,154.4 L868.0,157.3 L872.0,158.7 L876.0,158.8 L880.0,158.1 L884.0,157.1 L888.0,156.3 L892.0,156.2 L896.0,157.1 L900.0,159.0 L904.0,161.7 L908.0,164.9 L912.0,168.1 L916.0,170.9 L920.0,172.8 L924.0,173.6 L928.0,173.2 L932.0,172.0 L936.0,170.2 L940.0,168.4 L944.0,166.9 L948.0,166.1 L952.0,166.1 L956.0,166.9 L960.0,168.3 L964.0,169.7 L968.0,170.7 L972.0,170.8 L976.0,169.7 L980.0,167.3 L984.0,163.6 L988.0,159.0 L992.0,154.0 L996.0,149.1 L1000.0,144.9 L1004.0,141.9 L1008.0,140.1 L1012.0,139.7 L1016.0,140.3 L1020.0,141.6 L1024.0,143.1 L1028.0,144.4 L1032.0,145.2 L1036.0,145.5 L1040.0,145.3 L1044.0,145.0 L1048.0,145.0 L1052.0,145.6 L1056.0,147.4 L1060.0,150.5 L1064.0,154.9 L1068.0,160.5 L1072.0,166.8 L1076.0,173.1 L1080.0,179.1 L1084.0,184.1 L1088.0,187.8 L1092.0,190.2 L1096.0,191.2 L1100.0,191.4 L1104.0,191.0 L1108.0,190.7 L1112.0,190.9 L1116.0,191.7 L1120.0,193.3 L1124.0,195.5 L1128.0,198.1 L1132.0,200.4 L1136.0,202.3 L1140.0,203.1 L1144.0,203.0 L1148.0,201.8 L1152.0,199.9 L1156.0,197.6 L1160.0,195.6 L1164.0,194.3 L1168.0,194.1 L1172.0,195.3 L1176.0,197.6 L1180.0,201.0 L1184.0,204.9 L1188.0,208.8 L1192.0,212.2 L1196.0,214.6 L1200.0,215.9 L1200,240 L0,240 Z"/>
+        <path class="pf-line" d="M0.0,209.1 L4.0,205.3 L8.0,202.0 L12.0,199.7 L16.0,198.7 L20.0,198.9 L24.0,200.2 L28.0,202.2 L32.0,204.4 L36.0,206.4 L40.0,207.7 L44.0,208.2 L48.0,207.8 L52.0,206.9 L56.0,205.7 L60.0,204.7 L64.0,204.3 L68.0,204.9 L72.0,206.5 L76.0,208.9 L80.0,212.0 L84.0,215.1 L88.0,217.8 L92.0,219.5 L96.0,220.0 L100.0,219.1 L104.0,216.8 L108.0,213.5 L112.0,209.8 L116.0,206.1 L120.0,202.9 L124.0,200.6 L128.0,199.4 L132.0,199.1 L136.0,199.6 L140.0,200.3 L144.0,201.0 L148.0,201.0 L152.0,200.2 L156.0,198.6 L160.0,196.2 L164.0,193.5 L168.0,190.9 L172.0,188.7 L176.0,187.6 L180.0,187.6 L184.0,188.7 L188.0,190.8 L192.0,193.3 L196.0,195.9 L200.0,197.8 L204.0,198.7 L208.0,198.2 L212.0,196.4 L216.0,193.3 L220.0,189.4 L224.0,185.1 L228.0,181.0 L232.0,177.3 L236.0,174.5 L240.0,172.5 L244.0,171.1 L248.0,170.0 L252.0,168.8 L256.0,167.0 L260.0,164.3 L264.0,160.6 L268.0,156.0 L272.0,150.8 L276.0,145.4 L280.0,140.4 L284.0,136.2 L288.0,133.3 L292.0,131.8 L296.0,131.5 L300.0,132.3 L304.0,133.7 L308.0,135.1 L312.0,135.9 L316.0,135.9 L320.0,134.9 L324.0,132.8 L328.0,129.9 L332.0,126.7 L336.0,123.6 L340.0,121.0 L344.0,119.2 L348.0,118.4 L352.0,118.4 L356.0,118.9 L360.0,119.6 L364.0,119.9 L368.0,119.4 L372.0,117.9 L376.0,115.4 L380.0,112.1 L384.0,108.3 L388.0,104.7 L392.0,101.6 L396.0,99.7 L400.0,99.3 L404.0,100.3 L408.0,102.7 L412.0,106.1 L416.0,110.0 L420.0,113.9 L424.0,117.3 L428.0,120.0 L432.0,121.9 L436.0,123.1 L440.0,123.9 L444.0,124.8 L448.0,126.1 L452.0,128.3 L456.0,131.4 L460.0,135.4 L464.0,140.1 L468.0,145.0 L472.0,149.7 L476.0,153.5 L480.0,156.1 L484.0,157.4 L488.0,157.4 L492.0,156.3 L496.0,154.6 L500.0,152.9 L504.0,151.6 L508.0,151.1 L512.0,151.8 L516.0,153.5 L520.0,156.1 L524.0,159.1 L528.0,162.2 L532.0,164.7 L536.0,166.4 L540.0,167.1 L544.0,167.0 L548.0,166.1 L552.0,165.0 L556.0,164.2 L560.0,163.9 L564.0,164.4 L568.0,165.9 L572.0,168.2 L576.0,170.8 L580.0,173.3 L584.0,175.1 L588.0,175.8 L592.0,174.9 L596.0,172.4 L600.0,168.4 L604.0,163.3 L608.0,157.5 L612.0,151.6 L616.0,146.0 L620.0,141.1 L624.0,137.0 L628.0,133.6 L632.0,130.6 L636.0,127.6 L640.0,124.1 L644.0,119.9 L648.0,114.8 L652.0,108.7 L656.0,101.9 L660.0,94.8 L664.0,87.9 L668.0,81.8 L672.0,76.8 L676.0,73.1 L680.0,70.8 L684.0,69.7 L688.0,69.2 L692.0,69.0 L696.0,68.4 L700.0,67.1 L704.0,64.8 L708.0,61.5 L712.0,57.4 L716.0,53.0 L720.0,48.7 L724.0,45.0 L728.0,42.2 L732.0,40.6 L736.0,40.2 L740.0,40.7 L744.0,41.8 L748.0,43.0 L752.0,43.9 L756.0,44.2 L760.0,43.7 L764.0,42.7 L768.0,41.4 L772.0,40.3 L776.0,40.0 L780.0,40.9 L784.0,43.3 L788.0,47.3 L792.0,52.9 L796.0,59.7 L800.0,67.2 L804.0,74.8 L808.0,82.0 L812.0,88.5 L816.0,94.0 L820.0,98.6 L824.0,102.6 L828.0,106.3 L832.0,110.1 L836.0,114.4 L840.0,119.5 L844.0,125.3 L848.0,131.7 L852.0,138.3 L856.0,144.6 L860.0,150.1 L864.0,154.4 L868.0,157.3 L872.0,158.7 L876.0,158.8 L880.0,158.1 L884.0,157.1 L888.0,156.3 L892.0,156.2 L896.0,157.1 L900.0,159.0 L904.0,161.7 L908.0,164.9 L912.0,168.1 L916.0,170.9 L920.0,172.8 L924.0,173.6 L928.0,173.2 L932.0,172.0 L936.0,170.2 L940.0,168.4 L944.0,166.9 L948.0,166.1 L952.0,166.1 L956.0,166.9 L960.0,168.3 L964.0,169.7 L968.0,170.7 L972.0,170.8 L976.0,169.7 L980.0,167.3 L984.0,163.6 L988.0,159.0 L992.0,154.0 L996.0,149.1 L1000.0,144.9 L1004.0,141.9 L1008.0,140.1 L1012.0,139.7 L1016.0,140.3 L1020.0,141.6 L1024.0,143.1 L1028.0,144.4 L1032.0,145.2 L1036.0,145.5 L1040.0,145.3 L1044.0,145.0 L1048.0,145.0 L1052.0,145.6 L1056.0,147.4 L1060.0,150.5 L1064.0,154.9 L1068.0,160.5 L1072.0,166.8 L1076.0,173.1 L1080.0,179.1 L1084.0,184.1 L1088.0,187.8 L1092.0,190.2 L1096.0,191.2 L1100.0,191.4 L1104.0,191.0 L1108.0,190.7 L1112.0,190.9 L1116.0,191.7 L1120.0,193.3 L1124.0,195.5 L1128.0,198.1 L1132.0,200.4 L1136.0,202.3 L1140.0,203.1 L1144.0,203.0 L1148.0,201.8 L1152.0,199.9 L1156.0,197.6 L1160.0,195.6 L1164.0,194.3 L1168.0,194.1 L1172.0,195.3 L1176.0,197.6 L1180.0,201.0 L1184.0,204.9 L1188.0,208.8 L1192.0,212.2 L1196.0,214.6 L1200.0,215.9"/>
+      </svg>
+      <div class="pf-mark climb" style="left:32%;top:45%"><b>Z2 on the climb</b><span>152 bpm average</span></div>
+      <div class="pf-mark" style="left:62%;top:17%"><b>Summit</b><span>km 13.1, 1,240 m</span></div>
+      <div class="pf-mark end" style="left:99.3%;top:88%"><b>Decoupling 3.1%</b><span>steady to the finish</span></div>
+    </figure>
+  </section>
+
+  <section class="preview" aria-label="What the dashboard looks like">
+    <div class="preview-frame">
+      <div class="pv-kpis">
+        <div><span>7-day volume</span><b>48.2 km</b><em>4 sessions, 1,041 m gain</em></div>
+        <div><span>ACWR</span><b>1.08</b><em class="ok">Optimal zone</em></div>
+        <div><span>Aerobic efficiency</span><b>1.07</b><em>+8.8% over 16 weeks</em></div>
+        <div><span>Consecutive days</span><b>2</b><em>max in 14 days</em></div>
+      </div>
+      <div class="pv-chat">
+        <p class="pv-user">Heavy legs yesterday, felt off.</p>
+        <div class="pv-coach">
+          <p>That was Tuesday’s <strong>Easy run Z2</strong>: 7.3 km at 6:26/km, HR 145. Your efficiency (EF 1.07) is in line with your trend, so this isn’t a fitness problem.</p>
+          <p>More likely it’s Sunday’s <strong>Long trail run</strong> still in your legs: 897 m of climbing, TRIMP 216. Your ACWR is 1.08, so the overall load is safe.</p>
+          <p>Keep Thursday easy and move the intervals to Friday.</p>
+        </div>
+      </div>
+    </div>
+    <p class="preview-note">An example with the demo athlete. Every number the coach quotes comes from the computed metrics.</p>
+  </section>
+
+  <section class="steps">
+    <h2>How it works</h2>
+    <ol>
+      <li><b>Connect Strava</b><p>Sign in once. Your Strava tokens stay encrypted on the server and never reach the browser.</p></li>
+      <li><b>Your runs become metrics</b><p>Each session is turned into training load, aerobic efficiency, cardiac drift and time in heart-rate zones.</p></li>
+      <li><b>Ask the coach</b><p>Describe a session in your own words. The coach finds it and answers with your numbers, not generic advice.</p></li>
+    </ol>
   </section>
 
   <section class="features">
-    <article>
-      <h3>Aerobic efficiency</h3>
-      <p>Efficiency Factor (m/min per heartbeat) on comparable flat easy runs. It tracks base endurance progress, independent of the day's pace.</p>
-    </article>
-    <article>
-      <h3>Load and risk</h3>
-      <p>Banister TRIMP, then acute:chronic workload ratio (ACWR). It flags load spikes that are too sudden, the #1 cause of overuse injuries.</p>
-    </article>
-    <article>
-      <h3>Cardiac decoupling</h3>
-      <p>Second-by-second analysis: HR drift at constant pace (Pa:HR) and time in zones, computed from Strava streams.</p>
-    </article>
-    <article>
-      <h3>Grounded AI coach</h3>
-      <p>The model only sees metrics computed server-side, never data sent by the browser. Every piece of advice cites its numbers.</p>
-    </article>
-  </section>
-
-  <section class="arch">
-    <h2>Architecture</h2>
-    <div class="arch-flow" role="img" aria-label="Browser to Vercel serverless functions, which call the Strava API and the Claude API">
-      <div class="arch-node"><b>Browser</b><span>Static UI, no secrets, no tokens</span></div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-node accent"><b>Vercel Functions</b><span>OAuth + AES-GCM encrypted session · analytics engine · prompt builder · rate limiting</span></div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-node"><b>Strava API</b><span>activities + streams</span><b class="mt">Claude API</b><span>coach reasoning</span></div>
+    <h2>What it measures</h2>
+    <div class="feat-grid">
+      <article>
+        <svg viewBox="0 0 160 56" aria-hidden="true"><polyline class="v-soft" points="6,44 22,40 38,42 54,34 70,36 86,28 102,30 118,22 134,20 152,14"/><g class="v-dots"><circle cx="6" cy="46" r="2.5"/><circle cx="22" cy="38" r="2.5"/><circle cx="38" cy="44" r="2.5"/><circle cx="54" cy="32" r="2.5"/><circle cx="70" cy="38" r="2.5"/><circle cx="86" cy="26" r="2.5"/><circle cx="102" cy="32" r="2.5"/><circle cx="118" cy="20" r="2.5"/><circle cx="134" cy="22" r="2.5"/><circle cx="152" cy="12" r="2.5"/></g></svg>
+        <h3>Aerobic efficiency</h3>
+        <p>Efficiency Factor (metres per minute per heartbeat) on comparable flat easy runs. It shows whether your base endurance is improving, whatever the day’s pace.</p>
+      </article>
+      <article>
+        <svg viewBox="0 0 160 56" aria-hidden="true"><rect class="v-band" x="0" y="18" width="160" height="18"/><polyline class="v-line" points="0,40 20,34 40,30 60,26 80,28 100,22 120,12 140,8 160,14"/></svg>
+        <h3>Load and risk</h3>
+        <p>Banister TRIMP and the acute:chronic workload ratio (ACWR). It flags sudden jumps in load, the most common cause of overuse injuries.</p>
+      </article>
+      <article>
+        <svg viewBox="0 0 160 56" aria-hidden="true"><polyline class="v-soft" points="0,30 160,30"/><polyline class="v-line" points="0,40 30,37 60,34 90,30 120,27 160,22"/></svg>
+        <h3>Cardiac decoupling</h3>
+        <p>Second-by-second analysis of how your heart rate drifts at a steady pace, plus time spent in each zone, from Strava streams.</p>
+      </article>
+      <article>
+        <svg viewBox="0 0 160 56" aria-hidden="true"><rect class="v-bubble" x="2" y="8" width="118" height="30" rx="8"/><rect class="v-text" x="12" y="17" width="80" height="4" rx="2"/><rect class="v-text" x="12" y="26" width="56" height="4" rx="2"/><rect class="v-bubble me" x="96" y="40" width="62" height="14" rx="7"/></svg>
+        <h3>A coach grounded in data</h3>
+        <p>The model only sees metrics computed on the server, never data sent from the browser. Every piece of advice cites the numbers behind it.</p>
+      </article>
     </div>
   </section>
 
-  <footer class="foot">Designed and built by Justin Seriat · <a href="https://github.com/justinseriat15-coder/trail-ai" id="repo-link" target="_blank" rel="noopener">Source code</a></footer>
+  <section class="arch">
+    <h2>Under the hood</h2>
+    <div class="arch-flow" role="img" aria-label="Browser to Vercel serverless functions, which call the Strava API and the Claude API">
+      <div class="arch-node"><b>Browser</b><span>Static interface. No secrets, no tokens.</span></div>
+      <div class="arch-node accent"><b>Vercel Functions</b><span>Strava OAuth, encrypted session (AES-GCM), analytics engine, prompt builder, rate limiting.</span></div>
+      <div class="arch-node"><b>Strava API and Claude API</b><span>Activities and streams in, coaching out.</span></div>
+    </div>
+  </section>
+
+  <footer class="foot">Designed and built by Justin Seriat. <a href="https://github.com/justinseriat15-coder/trail-ai" id="repo-link" target="_blank" rel="noopener">Source code</a></footer>
 </main>
 
 <!-- ============ DASHBOARD ============ -->
@@ -143,7 +189,6 @@
   </div>
 </main>
 
-  
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>
