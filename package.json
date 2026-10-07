@@ -1,0 +1,9 @@
+{
+  "name": "trail-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Endurance training analytics on Strava data with an LLM coach grounded in computed metrics.",
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test tests/*.test.js" }
+}
