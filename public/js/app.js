@@ -1,7 +1,7 @@
 import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
-  aerobicEngine, engineReading, todayVerdict, sessionReading, climbTrend,
+  aerobicEngine, engineReading, easyShareLevel, climbNowOf, weeklyClimbSpeed, MIN_CLIMB_WEEKS, todayVerdict, sessionReading, climbTrend,
   timeInZones, decoupling, zoneBounds, METRIC_INFO, raceReadiness,
 } from './analytics.js';
 
@@ -188,18 +188,7 @@ function render() {
   const lv = loadVsUsual(acts, hrMax, hrRest);
   const es = easyShare(annotatedActivities());
   const eng = aerobicEngine(acts, hrMax);
-  const climbWeeks = weeks.map((w) => {
-    let gain = 0, secs = 0;
-    for (const a of acts) {
-      const info = state.insights.perActivity[a.id];
-      if (!info?.climbs?.length) continue;
-      const ws = new Date(w.week + 'T00:00'), we = new Date(ws); we.setDate(we.getDate() + 7);
-      const d = parseLocal(a.start_date_local);
-      if (d < ws || d >= we) continue;
-      for (const c of info.climbs) { gain += c.gain; secs += c.seconds; }
-    }
-    return { week: w.week, vertMph: secs >= 300 && gain > 0 ? Math.round(gain / (secs / 3600)) : null };
-  });
+  const climbWeeks = weeklyClimbSpeed(acts, state.insights.perActivity, 12);
   const ct = climbTrend(climbWeeks);
 
   // --- Today verdict
@@ -243,17 +232,19 @@ function render() {
     : `Right now: ${es.d28.pct}% of running time in Z1-Z2 over 28 days (target ~80%), from ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data.`;
 
   const lastVert = [...climbWeeks].reverse().find((w) => w.vertMph != null)?.vertMph;
-  const climbNow = ct.points.length ? ([...ct.points].reverse().find((w) => w.rolling != null)?.rolling ?? lastVert) : lastVert;
+  const climbNow = climbNowOf(ct);
   $('k-climb').textContent = climbNow == null ? '—' : `${climbNow} m/h`;
   const climbSub = $('k-climb-sub');
   const climbTrendTxt = ct.changePct == null ? null : `${ct.changePct > 0 ? 'up' : 'down'} ${Math.abs(ct.changePct)}% over 12 weeks`;
   climbSub.textContent = climbNow == null
-    ? (lastVert == null ? 'no sustained climbs lately' : 'not enough climbing for a trend')
+    ? (ct.weeksWithData === 0 ? 'no sustained climbs lately' : `not enough climbs yet (${ct.weeksWithData} of ${MIN_CLIMB_WEEKS} weeks)`)
     : ['3-week average', climbTrendTxt].filter(Boolean).join(' · ');
   climbSub.className = 'kpi-sub' + (ct.changePct == null ? '' : ct.changePct >= 3 ? ' on-target' : ct.changePct <= -3 ? ' caution' : '');
-  if (tipRefs.climb) tipRefs.climb.live.textContent = lastVert == null
+  if (tipRefs.climb) tipRefs.climb.live.textContent = ct.weeksWithData === 0
     ? 'No sustained climbs (50 m or more at 3% or steeper) in the recent sessions.'
-    : `Right now: about ${lastVert} vertical metres per hour on sustained climbs.`;
+    : climbNow == null
+      ? `Only ${ct.weeksWithData} week${ct.weeksWithData === 1 ? '' : 's'} with sustained climbs so far. The trend needs ${MIN_CLIMB_WEEKS}.`
+      : `Right now: about ${lastVert} vertical metres per hour on sustained climbs.`;
 
   if (eng.latestSecPerKm) {
     const m = Math.floor(eng.latestSecPerKm / 60), s2 = String(Math.round(eng.latestSecPerKm % 60)).padStart(2, '0');
@@ -322,7 +313,8 @@ function render() {
 
   // --- Climbing speed trend
   const cw = ct.points;
-  const lastRoll = [...cw].reverse().find((w) => w.rolling != null)?.rolling;
+  const lastRoll = climbNow;
+  $('climb-note').textContent = ct.enough || ct.weeksWithData === 0 ? 'vertical m/h on sustained climbs' : `not enough climbs yet (${ct.weeksWithData} of ${MIN_CLIMB_WEEKS} weeks)`;
   draw('c-climb', {
     type: 'line',
     data: {
@@ -383,7 +375,7 @@ function render() {
     const track = document.createElement('div'); track.className = 'easybar-track';
     if (d.pct != null) {
       const fill = document.createElement('div');
-      fill.className = `easybar-fill${d.pct < 68 ? ' low' : ''}`;
+      fill.className = `easybar-fill ${easyShareLevel(d.pct)}`;
       fill.style.width = `${d.pct}%`;
       track.appendChild(fill);
     }
@@ -399,7 +391,7 @@ function render() {
   }));
   $('easybar-foot').textContent = es.d28.pct == null
     ? 'Needs sessions recorded with heart rate.'
-    : `Target ~80% easy. ${esr.label}. Based on ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data in 28 days.`;
+    : `Target ~80% easy (green at 80% or more, ochre below). ${esr.label}. Based on ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data in 28 days.`;
 
   // --- Race readiness (fictional target race)
   const rr = raceReadiness(acts, { climbNow });
