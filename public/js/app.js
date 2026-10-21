@@ -412,20 +412,35 @@ async function send(text) {
   addMsg('user', text);
   state.chat.push({ role: 'user', content: text });
   const typing = addTyping();
+  const steps = addSteps();
   try {
     const r = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json' },
       body: JSON.stringify({ source: state.mode, messages: state.chat, activityId: state.selectedId }),
     });
-    const data = await r.json();
-    typing.remove();
-    if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
-    state.chat.push({ role: 'assistant', content: data.reply });
-    addMsg('assistant', data.reply);
-    if (data.model) $('chat-model').textContent = data.model;
+    const isStream = (r.headers.get('content-type') || '').includes('text/event-stream') && r.body;
+    if (!r.ok || !isStream) {
+      const data = await r.json();
+      typing.remove();
+      if (!r.ok) { steps.remove(); throw new Error(data.error || `Error ${r.status}`); }
+      (data.steps || []).forEach((label) => steps.add(label));
+      steps.finish();
+      state.chat.push({ role: 'assistant', content: data.reply });
+      addMsg('assistant', data.reply);
+      if (data.model) $('chat-model').textContent = data.model;
+    } else {
+      const answer = await readCoachStream(r.body, (label) => steps.add(label));
+      typing.remove();
+      if (!answer.text) steps.remove(); else steps.finish();
+      if (answer.error) throw new Error(answer.error);
+      state.chat.push({ role: 'assistant', content: answer.text });
+      addMsg('assistant', answer.text);
+      if (answer.model) $('chat-model').textContent = answer.model;
+    }
   } catch (e) {
     typing.remove();
+    steps.remove();
     state.chat.pop(); // keep the history alternating user/assistant
     addMsg('assistant', e.message, true);
   } finally {
@@ -443,6 +458,52 @@ function addMsg(role, text, isError = false) {
   $('chat-log').appendChild(div);
   $('chat-log').scrollTop = $('chat-log').scrollHeight;
   return div;
+}
+
+// Visible agent steps: one muted line per tool call, labelled from what the
+// server actually executed. Sits above the reply it belongs to.
+function addSteps() {
+  const div = document.createElement('div');
+  div.className = 'msg agent-steps';
+  div.hidden = true;
+  $('chat-log').appendChild(div);
+  $('chat-log').scrollTop = $('chat-log').scrollHeight;
+  return {
+    add(label) {
+      const line = document.createElement('div');
+      line.textContent = label;
+      div.appendChild(line);
+      div.hidden = false;
+      $('chat-log').scrollTop = $('chat-log').scrollHeight;
+    },
+    finish() { div.classList.add('done'); },
+    remove() { div.remove(); },
+  };
+}
+
+// Reads the coach's event stream: {type:'step'} while the agent fetches data,
+// one final {type:'reply'} (or {type:'error'}). Resolves with the reply payload.
+async function readCoachStream(body, onStep) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let answer = {};
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const events = buf.split('\n\n');
+    buf = events.pop();
+    for (const ev of events) {
+      const line = ev.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      let obj;
+      try { obj = JSON.parse(line.slice(6)); } catch { continue; }
+      if (obj.type === 'step') onStep(obj.label);
+      else if (obj.type === 'reply' || obj.type === 'error') answer = obj;
+    }
+  }
+  return answer;
 }
 
 function addTyping() {
