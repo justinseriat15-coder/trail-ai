@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it's built - Trail.AI</title>
+<meta name="description" content="The engineering behind Trail.AI: server-computed endurance metrics, a Claude agent with three data tools, and a security model that keeps secrets off the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a19'/%3E%3Cpath d='M5 24 L13 10 L18 18 L21 14 L27 24 Z' fill='%23ff5a1f'/%3E%3C/svg%3E">
+<style>
+  .doc { --gutter: clamp(16px, 4vw, 40px); }
+  .doc section, .doc-foot { max-width: 760px; margin: 0 auto; padding: 0 var(--gutter); }
+  .doc-hero { padding-top: clamp(48px, 8vw, 88px); padding-bottom: 8px; }
+  .doc-hero h1 { font-family: var(--sans); font-stretch: 68%; font-weight: 850; font-size: clamp(40px, 7vw, 72px); line-height: .95; letter-spacing: -.015em; margin-bottom: 20px; }
+  .doc-hero h1 span { color: var(--text-3); }
+  .doc-hero .lede { margin-bottom: 0; }
+  .doc h2 { font-family: var(--sans); font-stretch: 78%; font-weight: 800; font-size: clamp(22px, 2.6vw, 28px); line-height: 1.1; letter-spacing: -.01em; margin: clamp(40px, 6vw, 64px) 0 14px; padding-top: clamp(24px, 4vw, 32px); border-top: 1px solid var(--border); }
+  .doc h3 { font-size: 15px; font-weight: 700; margin: 22px 0 6px; }
+  .doc p { color: var(--text-2); margin-bottom: 12px; max-width: 68ch; }
+  .doc p b, .doc li b { color: var(--text); }
+  .doc ul { color: var(--text-2); padding-left: 20px; margin-bottom: 12px; }
+  .doc li { margin-bottom: 6px; }
+  .doc code { font-family: var(--mono); font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--text); }
+  .doc .toolcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; margin: 10px 0; }
+  .doc .toolcard b { font-family: var(--mono); font-size: 13px; color: var(--brand-2); font-weight: 500; }
+  .doc .toolcard p { margin: 6px 0 0; font-size: 14px; }
+  .doc .flow { display: grid; gap: 8px; margin: 16px 0; }
+  .doc .flow div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 16px; font-size: 14px; color: var(--text-2); }
+  .doc .flow div b { display: block; color: var(--text); margin-bottom: 2px; }
+  .doc .flow .accent { border-color: var(--brand); }
+  .doc .foot { max-width: 760px; }
+  .doc .back { display: inline-block; margin-bottom: 8px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="logo" href="/">TRAIL<span>.</span>AI</a>
+  <div class="topbar-right">
+    <a class="btn-ghost" href="/">Home</a>
+  </div>
+</header>
+
+<main class="doc">
+  <section class="doc-hero">
+    <h1>How it's built<span>.</span></h1>
+    <p class="lede">Trail.AI is a personal training dashboard that turns Strava data into endurance metrics, then lets an AI coach reason over those numbers. This page walks through the engineering: the metrics engine, the agent design, the security model, and how it's tested. <a href="https://github.com/justinseriat15-coder/trail-ai" target="_blank" rel="noopener">Full source on GitHub</a>.</p>
+  </section>
+
+  <section>
+    <h2>The stack</h2>
+    <div class="flow">
+      <div><b>Browser</b>Static HTML, vanilla JS and Chart.js. No framework, no build step, no secrets.</div>
+      <div class="accent"><b>Vercel serverless functions (Node)</b>Strava OAuth, encrypted session, metrics engine, prompt builder, agent loop, rate limiting.</div>
+      <div><b>Strava API</b>Activities, laps and second-by-second streams (heart rate, pace, altitude).</div>
+      <div><b>Claude API (Anthropic)</b>The coach. Sonnet for the signed-in athlete, Haiku for the public demo.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Metrics before words</h2>
+    <p>The coach never sees raw GPS files or guesswork. Every session is first reduced to computed metrics by one module of pure functions, shared verbatim between the browser (for the charts) and the server (for the agent's tools), so the number on a chart and the number in a coaching answer can never diverge.</p>
+    <ul>
+      <li><b>Efficiency Factor (EF)</b> - metres per minute per heartbeat, on flat aerobic runs of 20 minutes or more. Aerobic fitness with terrain and intensity noise filtered out.</li>
+      <li><b>TRIMP</b> - Banister's training impulse: duration weighted by heart-rate reserve, exponentially. The internal cost of a session.</li>
+      <li><b>ACWR</b> - acute (7-day) load against chronic (28-day) load. The 0.8–1.3 band is the sweet spot; spikes above 1.5 flag elevated injury risk.</li>
+      <li><b>Aerobic decoupling (Pa:HR)</b> - efficiency of the second half versus the first, after warm-up. Below 5% means durable endurance at that duration.</li>
+      <li><b>Time in zones</b> - a five-zone %HRmax model over the second-by-second streams, to check that easy runs are actually easy.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The coach is an agent, not a completion</h2>
+    <p>One model call decides for itself what it needs. There is no router and no forced tool use: the system prompt carries a cached summary of the athlete's current state (load, trends, last 15 sessions), which answers most questions on its own. For anything beyond that, the model has three tools:</p>
+    <div class="toolcard"><b>list_activities</b><p>Sessions in any date window, filtered by sport. Covers history, specific months and period comparisons.</p></div>
+    <div class="toolcard"><b>get_activity_details</b><p>Second-by-second analysis of one session: zones, kilometre splits, laps, decoupling.</p></div>
+    <div class="toolcard"><b>compute_stats</b><p>Deterministic metrics - summary, ACWR series, efficiency trend, weekly volume - computed by the same functions the dashboard uses.</p></div>
+    <p>The loop is capped at eight model calls per question, and the final call is always made without tools, so the model must end in a written answer. Live Strava calls are separately budgeted at six per question, which keeps latency and API usage predictable.</p>
+    <h3>Honest progress, live text</h3>
+    <p>The "Fetching activities…" lines in the chat are built only from the model's tool-call blocks - name and inputs - so the interface shows what the agent actually did, never what it claimed it would do. The answer itself is streamed token by token over server-sent events, on top of the agent's steps.</p>
+    <h3>Grounded, not trusted</h3>
+    <p>The browser sends only the conversation text. The server fetches the athlete's data itself, computes the metrics and builds the prompt. A user cannot inject fake training data into the coach's context, and the system prompt requires every recommendation to cite a number from it.</p>
+  </section>
+
+  <section>
+    <h2>Security and privacy</h2>
+    <ul>
+      <li><b>Secrets never reach the browser.</b> The OAuth exchange and token refresh run server-side. The session is a single AES-256-GCM encrypted cookie (<code>httpOnly</code>, <code>Secure</code>, <code>SameSite=Lax</code>) - stateless, so there is no database of tokens to leak.</li>
+      <li><b>Private context is owner-only.</b> Injury history and race plans live in an environment variable and enter the prompt only when the authenticated Strava athlete id matches the owner's. Never committed to the repo, never sent to the browser.</li>
+      <li><b>Defensive defaults.</b> OAuth state check, strict validation of every chat message (roles, alternation, length), model output escaped before rendering, and a restrictive Content-Security-Policy with security headers on every response.</li>
+      <li><b>Cost and abuse controls.</b> The demo runs on the smaller Haiku model with per-IP and global daily rate limits, and the system prompt is cached across turns (prompt caching) so repeated questions stay cheap.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>One code path, two athletes</h2>
+    <p>The demo is a fictional athlete: 16 weeks of synthetic but realistic training, generated by a seeded deterministic PRNG into Strava-shaped objects. Because demo and live data share the same shape, the same analytics, prompt builder, agent and UI run on both. The demo isn't a mock - it's the full product, and it doubles as a permanent integration test.</p>
+  </section>
+
+  <section>
+    <h2>How it's tested</h2>
+    <p>32 unit and integration tests (<code>node:test</code>, no framework) cover the metrics functions, the session crypto, and the whole agent loop against a mock model - tool selection, visible-step labels, streaming, budgets and the forced final answer. On top of that, a 10-question evaluation harness (<code>npm run eval</code>) runs real questions through the real model against demo data, checking that the coach reaches for the right tool for each kind of question.</p>
+    <p>Every change ships the same way: a branch, tests green, the Vercel preview checked on desktop and mobile, and only then a merge - the live site is on my CV, so it doesn't break.</p>
+  </section>
+
+  <footer class="foot doc-foot">Designed and built by Justin Seriat. <a href="https://github.com/justinseriat15-coder/trail-ai" target="_blank" rel="noopener">Source code</a></footer>
+</main>
+
+</body>
+</html>
