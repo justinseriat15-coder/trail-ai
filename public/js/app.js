@@ -2,7 +2,7 @@ import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
   aerobicEngine, engineReading, easyShareLevel, climbNowOf, weeklyClimbSpeed, MIN_CLIMB_WEEKS, todayVerdict, sessionReading, climbTrend,
-  timeInZones, decoupling, zoneBounds, METRIC_INFO, axisTicks, raceReadiness,
+  timeInZones, decoupling, zoneBounds, METRIC_INFO, axisTicks, raceReadiness, weeksToGo,
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
@@ -190,6 +190,7 @@ function renderRace(acts, climbNow) {
     $('race-note').textContent = 'no race set';
     $('race-limit').textContent = 'No race set yet';
     $('race-gauge').hidden = true;
+    $('race-weeks').hidden = true;
     $('race-parts').replaceChildren();
     $('race-sentence').textContent = 'Readiness is checked against a target race. It shows up here once a race is set.';
     if (tipRefs.race) tipRefs.race.live.textContent = 'No race set yet.';
@@ -206,6 +207,9 @@ function renderRace(acts, climbNow) {
   rfill.style.width = rr.score == null ? '0' : `${rr.score}%`;
   rfill.classList.toggle('full', rr.score === 100);
   $('race-pct').textContent = rr.score == null ? '—' : `${rr.score}%`;
+  const wk = weeksToGo(race);
+  $('race-weeks').textContent = wk || '';
+  $('race-weeks').hidden = !wk;
   const partRows = [
     [rr.parts.distance.unit === 'h' ? 'Longest run, 12 weeks' : 'Long run, 12 weeks', rr.parts.distance, (p) => `${p.have} ${p.unit} of ${p.need} ${p.unit}`],
     ['Biggest D+ week', rr.parts.vertWeek, (p) => `${fmtN(p.have)} m of ${fmtN(p.need)} m`],

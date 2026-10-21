@@ -96,7 +96,7 @@ npm test
 | `ANTHROPIC_API_KEY` | coach | Claude API key |
 | `ANTHROPIC_MODEL`, `ANTHROPIC_DEMO_MODEL` | no | model overrides |
 | `OWNER_ATHLETE_ID`, `HR_MAX`, `HR_REST`, `ATHLETE_CONTEXT` | no | owner-only personalization |
-| `RACE_TARGET` | no | owner's target race as JSON, e.g. `{"name":"My 50K","km":50,"dplus":2500,"hours":8}`. Server-side, same on every device. Without it live mode shows no race. |
+| `RACE_TARGET` | no | owner's target race as JSON, e.g. `{"name":"My 50K","km":50,"dplus":2500,"hours":8,"date":"2027-06-25"}`; `date` (ISO, optional) adds a "N weeks to go" line next to the score. Server-side, same on every device. Without it live mode shows no race. |
 | `APP_URL` | no | canonical URL for the OAuth redirect |
 
 ---

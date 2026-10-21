@@ -590,7 +590,23 @@ export function sanitizeRace(r) {
   if (distanceKm == null || dplusM == null) return null;
   const hours = num(r.hours, 0.5, 72);
   const name = String(r.name ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || 'my race';
-  return { name, distanceKm: +distanceKm.toFixed(1), dplusM: Math.round(dplusM), hours: hours == null ? null : +hours.toFixed(2) };
+  const out = { name, distanceKm: +distanceKm.toFixed(1), dplusM: Math.round(dplusM), hours: hours == null ? null : +hours.toFixed(2) };
+  const d = typeof r.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? new Date(`${r.date}T00:00:00Z`) : null;
+  if (d && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === r.date) out.date = r.date;
+  return out;
+}
+
+// "33 weeks to go" for a race with an ISO date. No date, or a date in the past,
+// means no label. Whole weeks, rounded down; under a week it says so in days.
+export function weeksToGo(race, now = new Date()) {
+  if (!race || !race.date) return null;
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((new Date(`${race.date}T00:00:00Z`).getTime() - today) / 86400000);
+  if (days < 0) return null;
+  if (days === 0) return 'Race day';
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} to go`;
+  const w = Math.floor(days / 7);
+  return `${w} week${w === 1 ? '' : 's'} to go`;
 }
 
 export function longRunTargetKm(race = DEMO_RACE) {

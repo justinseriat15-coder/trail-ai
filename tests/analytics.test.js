@@ -427,3 +427,21 @@ test('axis ticks: a tick close to the end is dropped, whole-km runs keep a plain
   assert.equal(t.at(-1).label, '10.2 km');
   assert.equal(A.axisTicks(2.3)[0].km, 0);
 });
+
+test('sanitizeRace keeps a valid ISO date and drops a bad one', () => {
+  assert.equal(A.sanitizeRace({ km: 175, dplus: 1430, date: '2027-06-25' }).date, '2027-06-25');
+  assert.equal('date' in A.sanitizeRace({ km: 175, dplus: 1430, date: '2027-02-30' }), false);
+  assert.equal('date' in A.sanitizeRace({ km: 175, dplus: 1430, date: 'June 25' }), false);
+  assert.equal('date' in A.sanitizeRace({ km: 175, dplus: 1430 }), false);
+});
+
+test('weeksToGo: whole weeks, no label without a date or after the race', () => {
+  const now = new Date(2026, 9, 21, 16, 0);
+  assert.equal(A.weeksToGo({ date: '2027-06-25' }, now), '35 weeks to go');
+  assert.equal(A.weeksToGo({ date: '2026-10-28' }, now), '1 week to go');
+  assert.equal(A.weeksToGo({ date: '2026-10-24' }, now), '3 days to go');
+  assert.equal(A.weeksToGo({ date: '2026-10-21' }, now), 'Race day');
+  assert.equal(A.weeksToGo({ date: '2026-10-01' }, now), null);
+  assert.equal(A.weeksToGo({ name: 'x' }, now), null);
+  assert.equal(A.weeksToGo(null, now), null);
+});
