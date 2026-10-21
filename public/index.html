@@ -119,7 +119,25 @@
 
   <div class="grid">
     <section class="col-data">
-      <div class="loading" id="loading"><div class="spinner"></div><span>Loading sessions…</span></div>
+      <header class="app-head">
+        <svg class="topo app-topo" viewBox="700 -100 700 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M3 11.5 21 3l-8.5 18-2-7.5z"/><path d="M506,330 L488,348 L472,363 L459,378 L450,393 L446,409 L442,428 L437,448 L428,469 L414,487 L394,502 L370,513 L343,518 L315,520 L287,520 L260,518 L234,515 L208,511 L183,505 L160,497 L138,486 L121,471 L109,454 L101,436 L95,419 L90,403 L83,388 L71,375 L54,362 L33,348 L11,330 L-8,309 L-20,286 L-22,262 L-14,240 L4,220 L29,206 L59,196 L89,189 L117,184 L143,180 L167,176 L190,171 L213,167 L236,164 L260,164 L283,166 L306,171 L327,177 L348,184 L370,189 L393,195 L418,200 L446,206 L473,215 L498,228 L517,245 L527,266 L528,288 L520,310 L506,330Z"/></svg>
+        <h1 id="app-title">Your training, <span>read like a coach.</span></h1>
+        <p class="app-sub" id="app-sub"></p>
+      </header>
+      <div class="skel-wrap" id="loading" aria-hidden="true">
+        <div class="kpis">
+          <div class="kpi skel"><i style="width:40%"></i><b style="width:65%"></b><i style="width:55%"></i></div>
+          <div class="kpi skel"><i style="width:35%"></i><b style="width:50%"></b><i style="width:70%"></i></div>
+          <div class="kpi skel"><i style="width:55%"></i><b style="width:45%"></b><i style="width:60%"></i></div>
+          <div class="kpi skel"><i style="width:45%"></i><b style="width:40%"></b><i style="width:50%"></i></div>
+        </div>
+        <div class="card skel skel-chart"></div>
+        <div class="two">
+          <div class="card skel skel-chart-sm"></div>
+          <div class="card skel skel-chart-sm"></div>
+        </div>
+        <div class="card skel skel-table"></div>
+      </div>
       <div id="data" hidden>
 
         <div class="kpis">

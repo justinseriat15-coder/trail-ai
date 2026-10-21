@@ -150,6 +150,31 @@ test('a direct answer uses no tool and costs one call', async () => {
   assert.equal(out.steps.length, 0);
 });
 
+test('streamed replies: text deltas reach onText and the final reply is whole', async () => {
+  const finalMsg = text('Hello world, keep it easy.');
+  const client = {
+    messages: {
+      stream: (req) => ({
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello ' } };
+          yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'world, keep it easy.' } };
+          yield { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'hmm' } };
+        },
+        finalMessage: async () => finalMsg,
+      }),
+      create: async () => { throw new Error('create should not be used when streaming'); },
+    },
+  };
+  const deltas = [];
+  const out = await runCoachAgent({
+    client, model: 'm', system: 's', ctx: demoCtx(),
+    messages: [{ role: 'user', content: 'How was this week?' }],
+    onText: (t) => deltas.push(t),
+  });
+  assert.deepEqual(deltas, ['Hello ', 'world, keep it easy.']); // thinking deltas never surface
+  assert.equal(out.reply, 'Hello world, keep it easy.');
+});
+
 // --- step labels come from the tool_use block, not model text ---
 
 test('step labels are built from tool name + inputs', () => {
