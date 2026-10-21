@@ -313,61 +313,53 @@ test('race readiness: long-run target is 2/3 of the race distance, not the full 
   assert.equal(A.longRunTargetKm({ distanceKm: 50 }), 33);
   assert.equal(A.longRunTargetKm({ distanceKm: 100 }), 67);
   const acts = raceWeeks(12, { moving_time: 14400, distance: 33000, total_elevation_gain: 2600 });
-  assert.equal(A.raceReadiness(acts, { climbNow: 900, now: NOW }).parts.distance.pct, 100);
+  assert.equal(A.raceReadiness(acts, { now: NOW }).parts.distance.pct, 100);
 });
 
-test('race readiness: score is the weakest link, never an average', () => {
-  // long run 100%, D+ week 100%, climb speed 50% -> score 50 (an average would say 83)
-  const acts = raceWeeks(12, { moving_time: 14400, distance: 40000, total_elevation_gain: 2600 });
-  const need = A.raceDemandMph(A.DEMO_RACE);
-  const r = A.raceReadiness(acts, { climbNow: need / 2, now: NOW });
+test('race readiness: score is the weaker of the two rules, never an average', () => {
+  // long run 100%, D+ week 50% -> score 50 (an average would say 75)
+  const acts = raceWeeks(12, { moving_time: 14400, distance: 40000, total_elevation_gain: 1250 });
+  const r = A.raceReadiness(acts, { now: NOW });
+  assert.equal(r.parts.distance.pct, 100);
+  assert.equal(r.parts.vertWeek.pct, 50);
   assert.equal(r.score, 50);
-  assert.equal(r.limiting.key, 'climb');
-  assert.match(r.sentence, /Limiting factor: climbing speed/);
+  assert.equal(r.limiting.key, 'vertWeek');
+  assert.match(r.sentence, /Limiting factor: climbing volume/);
 });
 
-test('race readiness: all checks covered says there is no weak link', () => {
-  const acts = raceWeeks(12, { moving_time: 20000, distance: 55000, total_elevation_gain: 2600 });
-  const r = A.raceReadiness(acts, { climbNow: 2000, now: NOW });
-  assert.equal(r.score, 100);
-  assert.match(r.sentence, /No weak link/);
+test('race readiness: climbing speed is context only, never scored', () => {
+  const acts = raceWeeks(12, { moving_time: 14400, distance: 40000, total_elevation_gain: 2600 });
+  const slow = A.raceReadiness(acts, { climbNow: 100, now: NOW });
+  const fast = A.raceReadiness(acts, { climbNow: 2000, now: NOW });
+  assert.equal(slow.score, fast.score);
+  assert.equal(slow.score, 100);
+  assert.equal(slow.context.climbSpeed, 100);
+  assert.deepEqual(Object.keys(slow.parts).sort(), ['distance', 'vertWeek']);
+  assert.match(slow.sentence, /No weak link/);
 });
 
 test('race readiness: shortest long run is the limiting factor', () => {
   const acts = raceWeeks(12, { moving_time: 3600, distance: 10000, total_elevation_gain: 2600 });
-  const r = A.raceReadiness(acts, { climbNow: 900, now: NOW });
+  const r = A.raceReadiness(acts, { now: NOW });
   assert.equal(r.parts.distance.pct, 30); // 10 km of 33 km
   assert.equal(r.limiting.key, 'distance');
   assert.match(r.sentence, /Limiting factor: the long run/);
 });
 
-test('race readiness: no measured climbing speed is stated, not scored', () => {
-  const acts = raceWeeks(12, { moving_time: 20000, distance: 55000, total_elevation_gain: 2600 });
-  const r = A.raceReadiness(acts, { climbNow: null, now: NOW });
-  assert.equal(r.parts.climb, null);
-  assert.equal(r.score, 100);
-  assert.match(r.sentence, /not measured yet/);
-});
-
-test('race demand: climbing speed needed scales with D+ and target time, sustained climbs are 40% of moving time', () => {
-  assert.equal(A.raceDemandMph({ dplusM: 2500, hours: 7 }), 893);
-  assert.equal(A.raceDemandMph({ dplusM: 2500, hours: 10 }), 625);
-  assert.equal(A.raceDemandMph({ dplusM: 0, hours: 7 }), 0);
-});
-
 test('race target validation: sane values pass, junk is rejected, name is cleaned', () => {
-  assert.deepEqual(A.sanitizeRace({ name: 'UTMB <b>CCC</b>', distanceKm: '100', dplusM: 6100, hours: 22 }),
+  assert.deepEqual(A.sanitizeRace({ name: 'UTMB <b>CCC</b>', km: '100', dplus: 6100, hours: 22 }),
     { name: 'UTMB bCCC/b', distanceKm: 100, dplusM: 6100, hours: 22 });
-  assert.equal(A.sanitizeRace({ distanceKm: 0, dplusM: 100, hours: 5 }), null);
-  assert.equal(A.sanitizeRace({ distanceKm: 50, dplusM: -5, hours: 5 }), null);
-  assert.equal(A.sanitizeRace({ distanceKm: 50, dplusM: 2500, hours: 'x' }), null);
+  assert.deepEqual(A.sanitizeRace({ distanceKm: 50, dplusM: 2500 }), { name: 'my race', distanceKm: 50, dplusM: 2500, hours: null });
+  assert.equal(A.sanitizeRace({ km: 0, dplus: 100 }), null);
+  assert.equal(A.sanitizeRace({ km: 50, dplus: -5 }), null);
+  assert.equal(A.sanitizeRace({ km: 'x', dplus: 100 }), null);
+  assert.equal(A.sanitizeRace({ dplus: 100 }), null);
   assert.equal(A.sanitizeRace(null), null);
-  assert.equal(A.sanitizeRace({ distanceKm: 50, dplusM: 2500, hours: 7 }).name, 'my race');
 });
 
 test('race readiness works on the demo dataset', () => {
   const r = A.raceReadiness(demoActivities(), { climbNow: 726, now: new Date('2026-10-20T12:00:00') });
-  assert.equal(r.score, Math.min(...Object.values(r.parts).map((p) => p.pct)));
+  assert.equal(r.score, Math.min(r.parts.distance.pct, r.parts.vertWeek.pct));
   assert.ok(r.score > 0 && r.score < 100, `score ${r.score}`);
   assert.match(r.sentence, /Limiting factor/);
 });

@@ -177,27 +177,15 @@
         </div>
 
         <div class="card" data-metric="race">
-          <div class="card-head"><h2>Race readiness</h2><span class="card-note" id="race-note">target: fictional 50 km · 2,500 m D+</span><button class="btn-ghost sm" id="race-edit" type="button" hidden>Edit race</button></div>
+          <div class="card-head"><h2>Race readiness</h2><span class="card-note" id="race-note">target: fictional 50 km · 2,500 m D+</span></div>
           <div class="race-lead" id="race-lead"><span>Limiting factor</span><b id="race-limit">—</b></div>
           <div class="race-gauge" id="race-gauge">
             <div class="race-track"><div class="race-fill" id="race-fill"></div></div>
             <b id="race-pct">—</b>
           </div>
           <div class="race-parts" id="race-parts"></div>
+          <p class="race-context" id="race-context"></p>
           <p class="card-foot" id="race-sentence"></p>
-          <form class="race-form" id="race-form" hidden>
-            <label>Race name<input id="rf-name" maxlength="40" autocomplete="off" placeholder="e.g. my 50K"></label>
-            <label>Distance (km)<input id="rf-dist" type="number" min="5" max="400" step="0.1" inputmode="decimal" required></label>
-            <label>Elevation gain (m D+)<input id="rf-dplus" type="number" min="0" max="30000" step="10" inputmode="numeric" required></label>
-            <label>Target moving time (h)<input id="rf-hours" type="number" min="0.5" max="72" step="0.25" inputmode="decimal" required></label>
-            <div class="race-form-actions">
-              <button class="btn-ghost sm" type="submit">Save race</button>
-              <button class="btn-ghost sm" type="button" id="rf-cancel">Cancel</button>
-              <button class="btn-ghost sm" type="button" id="rf-clear">Remove</button>
-            </div>
-            <p class="card-foot" id="rf-err" role="alert"></p>
-            <p class="card-foot">Saved in this browser only. The coach uses it when you ask about your race.</p>
-          </form>
         </div>
 
         <div class="card" id="detail" hidden>

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runCoachAgent, executeTool, stepLabel, TOOLS } from '../lib/agent.js';
 import { buildSystemPrompt } from '../lib/coach.js';
-import { loadAthlete } from '../lib/data.js';
+import { loadAthlete, envRace } from '../lib/data.js';
 import * as A from '../public/js/analytics.js';
 const { DEMO_RACE } = A;
 import { demoActivities, demoStreams } from '../public/js/demo-data.js';
@@ -239,6 +239,7 @@ test('compute_stats race_readiness: demo uses the fictional race, live without a
   assert.equal(out.race.name, 'fictional 50K');
   assert.ok(out.limiting.label);
   assert.equal(out.parts.distance.need, 33);
+  assert.equal(out.parts.climb, undefined);
   const live = demoCtx();
   live.race = null;
   const none = await executeTool(live, 'compute_stats', { metric: 'race_readiness' }, budget());
@@ -249,9 +250,18 @@ test('system prompt carries the race target and the limiting factor, never an av
   const ctx = demoCtx();
   ctx.race = DEMO_RACE;
   const p = buildSystemPrompt(ctx);
-  assert.match(p, /Race readiness: limiting factor/);
+  assert.match(p, /Race readiness \(rules of thumb\): limiting factor/);
   assert.match(p, /fictional, demo only/);
   assert.match(p, /Never give an average/);
+  assert.match(p, /context, not scored/);
   ctx.race = null;
   assert.match(buildSystemPrompt(ctx), /No race target is set/);
+});
+
+test('race target comes from the RACE_TARGET env var, server-side only; bad JSON means no race', () => {
+  const ok = envRace({ RACE_TARGET: JSON.stringify({ name: 'My 50K', km: 52, dplus: 2800, hours: 8 }) });
+  assert.deepEqual(ok, { name: 'My 50K', distanceKm: 52, dplusM: 2800, hours: 8 });
+  assert.equal(envRace({}), null);
+  assert.equal(envRace({ RACE_TARGET: 'not json' }), null);
+  assert.equal(envRace({ RACE_TARGET: '{"km":50}' }), null);
 });

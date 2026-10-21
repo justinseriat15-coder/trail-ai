@@ -283,8 +283,8 @@ export const METRIC_INFO = {
   },
   race: {
     name: 'Race readiness',
-    what: 'Three checks over the last 12 weeks against your target race: longest run vs a long-run target of 2/3 of the race distance, biggest week of climbing vs the race total D+, and climbing speed vs what the race asks (the race D+ spread over about 40% of your target moving time, the share a race spends on sustained climbs).',
-    meaning: 'No average: the headline is the weakest of the three, because a race is only as doable as its limiting factor. Each check is capped at 100%. Work on the limiting factor first.',
+    what: 'Two rules of thumb over the last 12 weeks against your target race: your longest run vs 2/3 of the race distance, and your biggest week of climbing vs the race total D+.',
+    meaning: 'No average: the score is the weaker of the two, because a race is only as doable as its limiting factor. Both targets are rules of thumb, not predictions. Climbing speed is shown for context and is not scored: training speed on short fresh climbs is not comparable to race-average climbing speed.',
   },
   engine: {
     name: 'Aerobic engine',
@@ -561,42 +561,34 @@ export function sparkPoints(streams, n = 24) {
 }
 
 // ---------- Race readiness ----------
-// Three checks against a target race, scored by the weakest link (a race is
-// only as doable as its limiting factor, so there is no average):
-//  1. Longest run in 12 weeks vs the long-run target = 2/3 of race distance
-//     (a 50K build peaks around 33 km, nobody runs the full distance).
+// Two rules of thumb, scored by the weakest link (a race is only as doable as
+// its limiting factor, so there is no average):
+//  1. Longest run in 12 weeks vs 2/3 of the race distance (a 50K build peaks
+//     around 33 km, nobody runs the full distance in training).
 //  2. Biggest week of climbing in 12 weeks vs the race's total D+.
-//  3. Climbing speed on sustained climbs vs what the race asks of it. A race
-//     is not climbed non-stop: sustained climbs are assumed to take about 40%
-//     of moving time (CLIMB_TIME_SHARE), so the speed needed on those climbs
-//     is D+ / (target moving hours x 0.4).
-// Each check is capped at 100%. The headline is the lowest of them.
+// Each check is capped at 100%; the score is the lower of the two.
+// Climbing speed is shown as context only: training speed on short fresh
+// climbs is not comparable to race-average climbing speed, so it is not scored.
 export const LONG_RUN_SHARE = 2 / 3;
-export const CLIMB_TIME_SHARE = 0.4;
-// Fictional race, used for the demo only. hours = target moving time.
+// Fictional race, used for the demo only. hours = target moving time (display only).
 export const DEMO_RACE = { name: 'fictional 50K', distanceKm: 50, dplusM: 2500, hours: 7 };
-export const RACE_TARGET = DEMO_RACE;
 
-// Validate a race target from any source (browser storage, request body).
-// Returns a clean object or null.
+// Validate a race target from any source (the RACE_TARGET env var).
+// Accepts { name, km, dplus, hours } or the long key names. Returns a clean
+// object or null. hours is optional (display only).
 export function sanitizeRace(r) {
   if (!r || typeof r !== 'object') return null;
-  const num = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
-  const distanceKm = num(r.distanceKm, 5, 400);
-  const dplusM = num(r.dplusM, 0, 30000);
+  const num = (v, lo, hi) => { const n = Number(v); return v != null && v !== '' && Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+  const distanceKm = num(r.distanceKm ?? r.km, 5, 400);
+  const dplusM = num(r.dplusM ?? r.dplus ?? r.dPlus, 0, 30000);
+  if (distanceKm == null || dplusM == null) return null;
   const hours = num(r.hours, 0.5, 72);
-  if (distanceKm == null || dplusM == null || hours == null) return null;
   const name = String(r.name ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || 'my race';
-  return { name, distanceKm: +distanceKm.toFixed(1), dplusM: Math.round(dplusM), hours: +hours.toFixed(2) };
+  return { name, distanceKm: +distanceKm.toFixed(1), dplusM: Math.round(dplusM), hours: hours == null ? null : +hours.toFixed(2) };
 }
 
 export function longRunTargetKm(race = DEMO_RACE) {
   return Math.round(race.distanceKm * LONG_RUN_SHARE);
-}
-
-// Climbing speed (vertical m/h on sustained climbs) the race asks for.
-export function raceDemandMph(race = DEMO_RACE) {
-  return Math.round(race.dplusM / (race.hours * CLIMB_TIME_SHARE));
 }
 
 export function raceReadiness(activities, { race = DEMO_RACE, climbNow = null, now = new Date() } = {}) {
@@ -606,32 +598,26 @@ export function raceReadiness(activities, { race = DEMO_RACE, climbNow = null, n
   const biggestDplus = weeklyVolume(activities, 12, now).reduce((m, w) => Math.max(m, w.dplus), 0);
   const cap = (x) => Math.max(0, Math.min(100, Math.round(x * 100)));
   const needKm = longRunTargetKm(race);
-  const needMph = raceDemandMph(race);
   const parts = {
     distance: { label: 'Long run', have: +longestKm.toFixed(1), need: needKm, pct: cap(longestKm / needKm) },
     vertWeek: { label: 'Biggest D+ week', have: biggestDplus, need: race.dplusM, pct: race.dplusM > 0 ? cap(biggestDplus / race.dplusM) : 100 },
-    climb: climbNow == null ? null : { label: 'Climbing speed', have: climbNow, need: needMph, pct: cap(climbNow / needMph) },
   };
-  const avail = Object.entries(parts).filter(([, p]) => p != null);
-  if (parts.distance.have === 0 && parts.vertWeek.have === 0 && !parts.climb) {
-    return { race, parts, limiting: null, score: null, sentence: 'Not enough training data yet to judge race readiness.' };
+  const context = { climbSpeed: climbNow };
+  if (parts.distance.have === 0 && parts.vertWeek.have === 0) {
+    return { race, parts, context, limiting: null, score: null, sentence: 'Not enough training data yet to judge race readiness.' };
   }
-  const limitingEntry = avail.reduce((m, e) => (e[1].pct < m[1].pct ? e : m), avail[0]);
-  const limiting = { key: limitingEntry[0], label: limitingEntry[1].label, pct: limitingEntry[1].pct };
+  const entries = Object.entries(parts);
+  const [key, weakest] = entries.reduce((m, e) => (e[1].pct < m[1].pct ? e : m), entries[0]);
+  const limiting = { key, label: weakest.label, pct: weakest.pct };
   const fmt = (n) => n.toLocaleString('en-GB');
-  const missing = parts.climb ? '' : ' Climbing speed is not measured yet (not enough climbs).';
   let sentence;
   if (limiting.pct >= 100) {
-    sentence = parts.climb
-      ? 'No weak link: the longest run, the biggest climbing week and climbing speed each cover what this race asks.'
-      : `The long run and the biggest climbing week cover what this race asks.${missing}`;
-  } else if (limiting.key === 'distance') {
-    sentence = `Limiting factor: the long run. ${parts.distance.have} km longest in 12 weeks against a ${needKm} km target (2/3 of ${race.distanceKm} km). Build it first.${missing}`;
-  } else if (limiting.key === 'vertWeek') {
-    sentence = `Limiting factor: climbing volume. ${fmt(parts.vertWeek.have)} m D+ in the biggest week against the ${fmt(race.dplusM)} m the race packs into one day.${missing}`;
+    sentence = 'No weak link: the longest run and the biggest climbing week both reach the rules of thumb for this race.';
+  } else if (key === 'distance') {
+    sentence = `Limiting factor: the long run. ${parts.distance.have} km longest in 12 weeks against a ${needKm} km target (2/3 of ${race.distanceKm} km). Build it first.`;
   } else {
-    sentence = `Limiting factor: climbing speed. ${parts.climb.have} m/h on sustained climbs against about ${needMph} m/h needed to finish in ${race.hours} h.`;
+    sentence = `Limiting factor: climbing volume. ${fmt(parts.vertWeek.have)} m D+ in the biggest week against the ${fmt(race.dplusM)} m the race packs into one day.`;
   }
-  return { race, parts, limiting, score: limiting.pct, sentence };
+  return { race, parts, context, limiting, score: limiting.pct, sentence };
 }
 

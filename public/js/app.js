@@ -2,7 +2,7 @@ import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
   aerobicEngine, engineReading, easyShareLevel, climbNowOf, weeklyClimbSpeed, MIN_CLIMB_WEEKS, todayVerdict, sessionReading, climbTrend,
-  timeInZones, decoupling, zoneBounds, METRIC_INFO, raceReadiness, DEMO_RACE, sanitizeRace,
+  timeInZones, decoupling, zoneBounds, METRIC_INFO, raceReadiness,
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
@@ -156,6 +156,7 @@ async function loadData() {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
     state.profile = data.profile;
+    state.race = data.race || null;
     state.activities = data.activities;
     state.insights = data.insights || { perActivity: {} };
     const latest = data.activities[0]?.start_date_local?.slice(0, 10);
@@ -178,31 +179,24 @@ function annotatedActivities() {
 }
 
 
-// ---------- Race target (editable in live mode only) ----------
-const RACE_KEY = 'trail-ai.race';
-function loadRace() {
-  if (state.mode === 'demo') return DEMO_RACE;
-  try { return sanitizeRace(JSON.parse(localStorage.getItem(RACE_KEY) || 'null')) || state.raceMemory || null; } catch { return state.raceMemory || null; }
-}
+// ---------- Race readiness ----------
+// The target comes from the server: the fictional race in demo, the owner's
+// RACE_TARGET setting in live mode (same on every device, nothing stored in the browser).
 function renderRace(acts, climbNow) {
-  state.raceInputs = { acts, climbNow };
-  const race = loadRace();
-  const live = state.mode !== 'demo';
-  $('race-edit').hidden = !live;
-  $('race-edit').textContent = race ? 'Edit race' : 'Set your race';
+  const race = state.race;
   const fmtN = (n) => n.toLocaleString('en-GB');
+  $('race-context').textContent = '';
   if (!race) {
     $('race-note').textContent = 'no race set';
-    $('race-limit').textContent = 'Set your race to see where you stand';
+    $('race-limit').textContent = 'No race set yet';
     $('race-gauge').hidden = true;
     $('race-parts').replaceChildren();
-    $('race-sentence').textContent = 'Add the distance, the elevation gain and the moving time you are aiming for. Readiness is then checked against it.';
+    $('race-sentence').textContent = 'Readiness is checked against a target race. It shows up here once a race is set.';
     if (tipRefs.race) tipRefs.race.live.textContent = 'No race set yet.';
-    if ($('race-form').hidden && !state.raceFormShown) openRaceForm(null);
     return;
   }
   const rr = raceReadiness(acts, { race, climbNow });
-  $('race-note').textContent = `target: ${race.name} · ${race.distanceKm} km · ${fmtN(race.dplusM)} m D+ · ${race.hours} h`;
+  $('race-note').textContent = `target: ${race.name} · ${race.distanceKm} km · ${fmtN(race.dplusM)} m D+${race.hours ? ` · ${race.hours} h` : ''}`;
   $('race-gauge').hidden = rr.score == null;
   const lead = $('race-limit');
   if (rr.limiting == null) lead.textContent = 'Not enough data yet';
@@ -215,57 +209,27 @@ function renderRace(acts, climbNow) {
   const partRows = [
     ['Long run, 12 weeks', rr.parts.distance, (p) => `${p.have} km of ${p.need} km`],
     ['Biggest D+ week', rr.parts.vertWeek, (p) => `${fmtN(p.have)} m of ${fmtN(p.need)} m`],
-    ['Climbing speed', rr.parts.climb, (p) => (p ? `${p.have} m/h of ~${p.need} m/h` : 'not enough climbs yet')],
   ];
   $('race-parts').replaceChildren(...partRows.map(([lbl, p, fmt]) => {
     const row = document.createElement('div');
     row.className = 'race-part';
     const l = document.createElement('span'); l.className = 'lbl'; l.textContent = lbl;
     const track = document.createElement('div'); track.className = 'easybar-track';
-    if (p) {
-      const f = document.createElement('div');
-      f.className = 'easybar-fill';
-      f.style.width = `${p.pct}%`;
-      track.appendChild(f);
-    }
+    const f = document.createElement('div');
+    f.className = 'easybar-fill';
+    f.style.width = `${p.pct}%`;
+    track.appendChild(f);
     const v = document.createElement('b');
     v.textContent = fmt(p);
-    if (p) v.className = p.pct >= 100 ? 'st-ok' : 'st-gap';
+    v.className = p.pct >= 100 ? 'st-ok' : 'st-gap';
     row.append(l, track, v);
     return row;
   }));
-  $('race-sentence').textContent = rr.sentence;
+  $('race-context').textContent = rr.context.climbSpeed == null
+    ? 'Context, not scored: climbing speed needs more climbs.'
+    : `Context, not scored: climbing speed ${rr.context.climbSpeed} m/h on sustained climbs in training.`;
+  $('race-sentence').textContent = `${rr.sentence} Rules of thumb, not a prediction.`;
   if (tipRefs.race) tipRefs.race.live.textContent = rr.sentence;
-}
-function openRaceForm(race) {
-  state.raceFormShown = true;
-  $('rf-name').value = race?.name && race.name !== 'my race' ? race.name : '';
-  $('rf-dist').value = race?.distanceKm ?? '';
-  $('rf-dplus').value = race?.dplusM ?? '';
-  $('rf-hours').value = race?.hours ?? '';
-  $('rf-err').textContent = '';
-  $('race-form').hidden = false;
-  $('rf-clear').hidden = !race;
-}
-function initRaceForm() {
-  $('race-edit').addEventListener('click', () => {
-    if ($('race-form').hidden) openRaceForm(loadRace()); else { $('race-form').hidden = true; }
-  });
-  $('rf-cancel').addEventListener('click', () => { $('race-form').hidden = true; });
-  $('rf-clear').addEventListener('click', () => {
-    state.raceMemory = null;
-    try { localStorage.removeItem(RACE_KEY); } catch { /* storage blocked: nothing to remove */ }
-    $('race-form').hidden = true;
-    renderRace(state.raceInputs.acts, state.raceInputs.climbNow);
-  });
-  $('race-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const race = sanitizeRace({ name: $('rf-name').value, distanceKm: $('rf-dist').value, dplusM: $('rf-dplus').value, hours: $('rf-hours').value });
-    if (!race) { $('rf-err').textContent = 'Check the values: distance 5-400 km, D+ 0-30,000 m, time 0.5-72 h.'; return; }
-    try { localStorage.setItem(RACE_KEY, JSON.stringify(race)); } catch { $('rf-err').textContent = 'This browser blocks saving. The race is used until you reload.'; state.raceMemory = race; }
-    $('race-form').hidden = true;
-    renderRace(state.raceInputs.acts, state.raceInputs.climbNow);
-  });
 }
 
 // ---------- Dashboard ----------
@@ -773,7 +737,6 @@ function initChat() {
   $('chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('chat-text').value); } });
   $('chat-text').addEventListener('input', (e) => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`; });
   $('chips').addEventListener('click', (e) => { if (e.target.dataset.q) send(e.target.dataset.q); });
-  initRaceForm();
   $('d-close').addEventListener('click', () => { $('detail').hidden = true; state.selectedId = null; document.querySelectorAll('.runs tr.sel').forEach((t) => t.classList.remove('sel')); });
   $('d-ask').addEventListener('click', () => send('Analyse the selected session: quality of the aerobic work, decoupling, time in zones, and what I should take away from it.'));
   $('logout-btn').addEventListener('click', async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/'; });
@@ -801,7 +764,7 @@ async function send(text) {
     const r = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json' },
-      body: JSON.stringify({ source: state.mode, messages: state.chat, activityId: state.selectedId, race: state.mode === 'demo' ? undefined : loadRace() }),
+      body: JSON.stringify({ source: state.mode, messages: state.chat, activityId: state.selectedId }),
     });
     const isStream = (r.headers.get('content-type') || '').includes('text/event-stream') && r.body;
     if (!r.ok || !isStream) {
