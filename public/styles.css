@@ -227,3 +227,17 @@ button { font: inherit; cursor: pointer; }
 
 /* Keyboard focus */
 a:focus-visible, button:focus-visible, textarea:focus-visible, tr:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---------- Metric explanation tips ---------- */
+.kpi { position: relative; }
+.tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 6px; padding: 0; border-radius: 50%; border: 1px solid var(--text-3); background: transparent; color: var(--text-3); vertical-align: 1px; }
+.tip i { font-style: normal; font-family: var(--mono); font-size: 9px; line-height: 1; }
+.tip:hover, .tip:focus-visible, .tip.open { border-color: var(--text-2); color: var(--text-2); outline: none; }
+.tip-bubble { display: none; position: absolute; top: calc(100% + 8px); left: -8px; z-index: 30; flex-direction: column; gap: 6px; width: 240px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); box-shadow: 0 10px 28px rgba(0,0,0,.45); text-align: left; text-transform: none; letter-spacing: normal; cursor: default; }
+.tip:hover .tip-bubble, .tip:focus-visible .tip-bubble, .tip.open .tip-bubble { display: flex; }
+.tip-bubble b { font-size: 12px; color: var(--text); }
+.tip-bubble span { font-size: 12px; font-weight: 400; color: var(--text-2); }
+.tip-bubble em { font-style: normal; font-size: 12px; font-weight: 400; color: var(--text); border-top: 1px solid var(--border); padding-top: 6px; }
+@media (max-width: 700px) { .tip-bubble { left: auto; right: -8px; width: min(240px, 62vw); } }
+.stat-note { grid-column: 1 / -1; font-size: 11px; color: var(--text-2); margin: 2px 0 0; }
+#d-zones .stat-note { margin-top: 8px; }
