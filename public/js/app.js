@@ -2,7 +2,7 @@ import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
   aerobicEngine, engineReading, easyShareLevel, climbNowOf, weeklyClimbSpeed, MIN_CLIMB_WEEKS, todayVerdict, sessionReading, climbTrend,
-  timeInZones, decoupling, zoneBounds, METRIC_INFO, raceReadiness,
+  timeInZones, decoupling, zoneBounds, METRIC_INFO, axisTicks, raceReadiness,
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
@@ -580,6 +580,9 @@ function buildHero(streams, climbs) {
   const step = Math.max(1, Math.floor(dist.length / 400));
   const pts = [];
   for (let i = 0; i < dist.length; i += step) pts.push({ km: dist[i] / 1000, alt: alt[i], hr: hr?.[i], v: vel?.[i] });
+  // Always end on the true last sample so the series reaches the full distance.
+  const li = dist.length - 1;
+  if (li % step !== 0) pts.push({ km: dist[li] / 1000, alt: alt[li], hr: hr?.[li], v: vel?.[li] });
   const xMax = pts.at(-1).km || 1;
   const yMin = Math.min(...pts.map((p) => p.alt));
   const yMax = Math.max(...pts.map((p) => p.alt));
@@ -616,11 +619,10 @@ function buildHero(streams, climbs) {
     const t2 = mk('text', { x: tx, y: Y(altTop) - 10, 'text-anchor': anchor, class: 'phero-annot sub' }, svg);
     t2.textContent = `${c.vertMph} m/h vertical`;
   });
-  const kmEvery = Math.max(1, Math.round(xMax / 6));
-  for (let k = 0; k <= xMax; k += kmEvery) {
-    const edge = k === 0 ? 'start' : (k + kmEvery > xMax ? 'end' : 'middle');
-    const t = mk('text', { x: k === 0 ? 2 : (edge === 'end' ? W - 2 : X(k)), y: H - 6, 'text-anchor': edge, class: 'phero-tick' }, svg);
-    t.textContent = `${k} km`;
+  for (const tk of axisTicks(xMax)) {
+    const x = tk.anchor === 'start' ? 2 : tk.anchor === 'end' ? W - 2 : X(tk.km);
+    const t = mk('text', { x, y: H - 6, 'text-anchor': tk.anchor, class: 'phero-tick' }, svg);
+    t.textContent = tk.label;
   }
   box.appendChild(svg);
 

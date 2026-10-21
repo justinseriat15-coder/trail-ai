@@ -633,3 +633,17 @@ export function raceReadiness(activities, { race = DEMO_RACE, climbNow = null, n
   return { race, parts, context, limiting, score: limiting.pct, sentence };
 }
 
+// ---------- Distance axis ticks for the session profile ----------
+// Ticks sit at their true position (km / total). The last label is the exact
+// end of the run ("20.4 km"), anchored at the right edge; a regular tick that
+// would collide with it is dropped, so no label ever sits at the wrong place.
+export function axisTicks(xMax, maxTicks = 6) {
+  const nice = [0.5, 1, 2, 5, 10, 20, 25, 50];
+  const step = nice.find((n) => xMax / n <= maxTicks) ?? Math.ceil(xMax / maxTicks);
+  const ticks = [];
+  for (let k = 0; k < xMax - 1e-9; k += step) ticks.push({ km: +k.toFixed(2), anchor: k === 0 ? 'start' : 'middle' });
+  const endLabel = Number.isInteger(xMax) ? String(xMax) : xMax.toFixed(1);
+  const kept = ticks.filter((t) => t.km === 0 || xMax - t.km >= step * 0.45);
+  kept.push({ km: xMax, anchor: 'end', label: `${endLabel} km`, isEnd: true });
+  return kept.map((t) => ({ label: t.label || `${t.km} km`, ...t }));
+}

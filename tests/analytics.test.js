@@ -409,3 +409,21 @@ test('easy share: two levels only, green at 80%+ and ochre below', () => {
   for (const p of [79, 71, 68, 66, 40]) assert.equal(A.easyShareLevel(p), 'warning');
   for (const p of [90, 80, 79, 71, 66, 40]) assert.equal(A.easyShareReading(p).level, A.easyShareLevel(p));
 });
+
+// ---------- Profile distance axis ----------
+test('axis ticks: last label is the exact end of the run, never a shorter tick at the far edge', () => {
+  const t = A.axisTicks(20.4);
+  assert.equal(t.at(-1).label, '20.4 km');
+  assert.equal(t.at(-1).anchor, 'end');
+  assert.equal(t.filter((x) => x.anchor === 'end').length, 1);
+  assert.deepEqual(t.filter((x) => !x.isEnd).map((x) => x.km), [0, 5, 10, 15]);
+  assert.ok(t.every((x) => x.km <= 20.4));
+});
+
+test('axis ticks: a tick close to the end is dropped, whole-km runs keep a plain label', () => {
+  assert.equal(A.axisTicks(10).at(-1).label, '10 km');
+  const t = A.axisTicks(10.2);
+  assert.ok(!t.some((x) => !x.isEnd && x.km === 10));
+  assert.equal(t.at(-1).label, '10.2 km');
+  assert.equal(A.axisTicks(2.3)[0].km, 0);
+});
