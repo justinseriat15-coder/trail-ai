@@ -95,7 +95,28 @@ function heroDraw() {
       const t = BASE + DUR * easeInv(Math.min(1, lengthAtX(x) / total));
       mark.style.setProperty('--pf-delay', `${Math.round(t)}ms`);
     });
-    fig.classList.add('anim');
+    const begin = () => {
+      fig.classList.add('anim');
+      // Completion guard: the final frame is identical to the base styles, so
+      // removing .anim after the last animation always lands on the finished
+      // figure - even if the browser throttled or froze the CSS animation
+      // mid-flight (background tab, GPU quirks). Without .anim the line is
+      // fully drawn and the marks are visible.
+      setTimeout(() => fig.classList.remove('anim'), BASE + DUR + 1100);
+    };
+    // Never start while the tab is hidden: Chrome pauses animations in
+    // background tabs, which can leave the draw frozen part-way. Start when
+    // the visitor is actually looking.
+    if (document.hidden) {
+      const onVis = () => {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', onVis);
+        begin();
+      };
+      document.addEventListener('visibilitychange', onVis);
+    } else {
+      begin();
+    }
   };
 
   // Start when the figure is on screen (it is display:none until boot shows the landing).
