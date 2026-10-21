@@ -2,7 +2,7 @@
 
 Endurance training analytics on Strava data, with an LLM coach that only reasons over metrics computed server-side.
 
-**Live demo:** https://trail-dashboard-one.vercel.app/?mode=demo (fictional athlete, 16 weeks of synthetic data)
+**Live demo:** https://trail-dashboard-one.vercel.app/?mode=demo (fictional athlete, 16 weeks of synthetic data) · **[How it's built](https://trail-dashboard-one.vercel.app/how-its-built.html)**
 
 ![Architecture](https://img.shields.io/badge/stack-Vercel%20Functions%20·%20Strava%20API%20·%20Claude%20API-1a1a19)
 
@@ -44,10 +44,14 @@ api/               serverless endpoints
   auth/callback    → code exchange server-side, encrypted session
   activities       → activities + HR profile (demo or live)
   streams          → per-second streams of one activity
-  chat             → coach reply
-lib/               session crypto, Strava client, prompt builder, rate limiter
-tests/             node:test unit tests (metrics + session crypto)
+  chat             → coach agent (tool loop) with SSE step + text streaming
+lib/               session crypto, Strava client, prompt builder, agent loop, rate limiter
+tests/             node:test unit tests (metrics, session crypto, agent loop) + live eval harness (`npm run eval`)
 ```
+
+## The coach agent
+
+One model call decides for itself what it needs: no router, no forced tool use. The cached system prompt covers current state (load, trends, last ~15 sessions); three tools cover the rest - `list_activities` (any date window), `get_activity_details` (second-by-second zones, splits, laps, decoupling) and `compute_stats` (the same deterministic functions the dashboard uses). The loop is capped at 8 model calls and always ends on a call without tools, so it must produce a written answer. Live Strava calls are budgeted at 6 per question. The visible steps in the chat are built only from the model's `tool_use` blocks, and the reply is streamed as server-sent events.
 
 ## Design decisions
 
@@ -68,7 +72,7 @@ tests/             node:test unit tests (metrics + session crypto)
 - EF does not use grade-adjusted pace; trail runs with significant D+ are excluded rather than corrected. Next: grade-adjusted speed from altitude streams.
 - %HRmax zones are a simplification; a lactate or ventilatory threshold test would personalize them.
 - Strava apps start in single-athlete mode; multi-user access requires Strava's app review.
-- Streaming responses (SSE) for the coach, and a persistent store to track conversations over time.
+- A persistent store to track conversations over time.
 
 ## Run locally
 
