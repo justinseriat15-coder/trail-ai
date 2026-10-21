@@ -562,9 +562,9 @@ function subChart(pts, get, cls, unit, W, X, reverse = false) {
   const H = 74, padT = 8, padB = 14;
   const vals = pts.map(get).filter((x) => x != null);
   if (!vals.length) return document.createDocumentFragment();
-  let lo = Math.min(...vals), hi = Math.max(...vals);
-  const pad = (hi - lo || 1) * 0.15;
-  lo -= pad; hi += pad;
+  const rawLo = Math.min(...vals), rawHi = Math.max(...vals);
+  const pad = (rawHi - rawLo || 1) * 0.15;
+  const lo = rawLo - pad, hi = rawHi + pad;
   const Y = (v) => reverse
     ? padT + ((v - lo) / (hi - lo)) * (H - padT - padB)
     : padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
@@ -572,9 +572,9 @@ function subChart(pts, get, cls, unit, W, X, reverse = false) {
   const line = pts.filter((p) => get(p) != null).map((p) => [X(p.km), Y(get(p))]);
   mk('path', { d: pathFrom(line), class: cls }, svg);
   const loT = mk('text', { x: W - 2, y: Math.min(H - 4, Y(lo) + 10), 'text-anchor': 'end', class: 'phero-tick' }, svg);
-  loT.textContent = unit === 'bpm' ? `${Math.round(lo)} bpm` : `${paceFromMinPerKm(lo)}`;
+  loT.textContent = unit === 'bpm' ? `${Math.round(rawLo)} bpm` : `${paceFromMinPerKm(rawLo)}`;
   const hiT = mk('text', { x: W - 2, y: Math.max(11, Y(hi) - 4), 'text-anchor': 'end', class: 'phero-tick' }, svg);
-  hiT.textContent = unit === 'bpm' ? `${Math.round(hi)} bpm` : `${paceFromMinPerKm(hi)}`;
+  hiT.textContent = unit === 'bpm' ? `${Math.round(rawHi)} bpm` : `${paceFromMinPerKm(rawHi)}`;
   return svg;
 }
 
