@@ -45,3 +45,90 @@ async function fill() {
 }
 
 fill();
+
+// ---------- Motion (phase 3): everything degrades to static without JS or
+// under prefers-reduced-motion; the CSS only animates once JS opts in. ----------
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Hero elevation profile: the line draws like a pencil following the terrain
+// (3.4 s ease-in-out). Each annotation fades in when the drawn tip reaches its
+// x position, so delays come from the real path length, not guesses.
+function heroDraw() {
+  const fig = document.querySelector('.profile');
+  const line = fig?.querySelector('.pf-line');
+  if (!fig || !line || reducedMotion()) return;
+
+  const DUR = 3400, BASE = 150; // keep in sync with styles.css (.profile.anim)
+  // CSS ease-in-out = cubic-bezier(.42, 0, .58, 1): eased progress at time x.
+  const bezierY = (() => {
+    const X = (t) => 3 * t * (1 - t) ** 2 * 0.42 + 3 * t * t * (1 - t) * 0.58 + t ** 3;
+    const Y = (t) => 3 * t * t * (1 - t) + t ** 3;
+    return (x) => {
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 26; i++) { const m = (lo + hi) / 2; if (X(m) < x) lo = m; else hi = m; }
+      return Y((lo + hi) / 2);
+    };
+  })();
+  // Inverse: time fraction at which the draw reaches eased progress e.
+  const easeInv = (e) => {
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 26; i++) { const m = (lo + hi) / 2; if (bezierY(m) < e) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  };
+
+  const start = () => {
+    // The wipe reveals the figure left to right, so each mark fires when the
+    // eased wipe reaches its x position (x grows monotonically across the viewBox).
+    fig.querySelectorAll('.pf-mark').forEach((mark) => {
+      const pct = parseFloat(mark.style.left) || 0;
+      const t = BASE + DUR * easeInv(Math.min(1, pct / 100));
+      mark.style.setProperty('--pf-delay', `${Math.round(t)}ms`);
+    });
+    const begin = () => {
+      fig.classList.add('anim');
+      // Completion guard: the final frame is identical to the base styles, so
+      // removing .anim after the last animation always lands on the finished
+      // figure - even if the browser throttled or froze the CSS animation
+      // mid-flight (background tab, GPU quirks). Without .anim the line is
+      // fully drawn and the marks are visible.
+      setTimeout(() => fig.classList.remove('anim'), BASE + DUR + 1100);
+    };
+    // Never start while the tab is hidden: Chrome pauses animations in
+    // background tabs, which can leave the draw frozen part-way. Start when
+    // the visitor is actually looking.
+    if (document.hidden) {
+      const onVis = () => {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', onVis);
+        begin();
+      };
+      document.addEventListener('visibilitychange', onVis);
+    } else {
+      begin();
+    }
+  };
+
+  // Start when the figure is on screen (it is display:none until boot shows the landing).
+  if (!('IntersectionObserver' in window)) { start(); return; }
+  const io = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) { io.disconnect(); start(); }
+  }, { threshold: 0.35 });
+  io.observe(fig);
+}
+
+// Other landing sections: one subtle fade/slide the first time they appear.
+function sectionReveals() {
+  if (reducedMotion() || !('IntersectionObserver' in window)) return;
+  const els = document.querySelectorAll('#landing .preview, #landing .steps, #landing .features, #landing .arch');
+  if (!els.length) return;
+  els.forEach((el) => el.classList.add('reveal'));
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }
+  }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+  els.forEach((el) => io.observe(el));
+}
+
+heroDraw();
+sectionReveals();

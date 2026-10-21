@@ -72,11 +72,22 @@ button { font: inherit; cursor: pointer; }
 
 /* The annotated elevation profile - the site's signature element. */
 .profile { position: relative; height: clamp(150px, 20vw, 240px); margin: 12px 0 0; }
-.profile svg { width: 100%; height: 100%; display: block; clip-path: inset(-20px 100% -20px 0); animation: reveal 1.8s .2s cubic-bezier(.4,0,.2,1) forwards; }
-@keyframes reveal { to { clip-path: inset(-20px 0 -20px 0); } }
+.profile svg { width: 100%; height: 100%; display: block; }
 .pf-area { fill: url(#pf); }
 .pf-line { fill: none; stroke: var(--brand); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.pf-mark { position: absolute; transform: translate(-50%, calc(-100% - 14px)); display: flex; flex-direction: column; align-items: center; text-align: center; font-family: var(--mono); font-size: 10px; line-height: 1.5; white-space: nowrap; opacity: 0; animation: fade .5s 1.7s forwards; }
+/* Pencil draw: the line draws over ~3.4 s ease-in-out, the area fill wipes
+   behind it, and each annotation fades in when the tip reaches it (JS sets
+   --pf-delay per mark from the path length at its x position). The .anim
+   class is added by JS only, so no-JS and unsupported browsers get the
+   finished figure. */
+/* The reveal is a clip-path wipe on both the line and the area fill - the
+   same mechanism, so they always advance together. (An earlier version drew
+   the line with stroke-dasharray/pathLength; Chrome on Windows stopped the
+   dash short of the path end, so the line never finished there.) */
+.profile.anim .pf-line, .profile.anim .pf-area { clip-path: inset(-20px 100% -20px 0); animation: pf-wipe 3.4s ease-in-out .15s forwards; }
+.profile.anim .pf-mark { opacity: 0; animation: fade .45s ease-out forwards; animation-delay: var(--pf-delay, 3.4s); }
+@keyframes pf-wipe { to { clip-path: inset(-20px 0 -20px 0); } }
+.pf-mark { position: absolute; transform: translate(-50%, calc(-100% - 14px)); display: flex; flex-direction: column; align-items: center; text-align: center; font-family: var(--mono); font-size: 10px; line-height: 1.5; white-space: nowrap; }
 .pf-mark b { font-variant-caps: small-caps; letter-spacing: .8px; }
 .pf-mark b { font-weight: 500; color: var(--text); }
 .pf-mark span { color: var(--text-3); font-size: 9px; }
@@ -84,7 +95,7 @@ button { font: inherit; cursor: pointer; }
 .pf-mark.end { transform: translate(-100%, calc(-100% - 14px)); align-items: flex-end; text-align: right; }
 .pf-mark.end::after { left: auto; right: -4px; transform: none; }
 @keyframes fade { to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .profile svg { animation: none; clip-path: none; } .pf-mark { animation: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .profile.anim .pf-line, .profile.anim .pf-area, .profile.anim .pf-mark { animation: none; clip-path: none; opacity: 1; } }
 
 .preview { padding-top: 8px !important; margin-bottom: clamp(72px, 10vw, 128px) !important; }
 .preview-frame { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 70px -46px rgba(90, 70, 30, .5); }
@@ -132,6 +143,12 @@ button { font: inherit; cursor: pointer; }
 .arch-node.accent { background: var(--surface); box-shadow: inset 0 2px 0 var(--brand); }
 .arch-node b { font-size: 16px; font-weight: 650; }
 .arch-node span { font-size: 14px; color: var(--text-2); }
+/* First-view section reveals: JS adds .reveal, IntersectionObserver adds .in
+   once. Transform-only, so no layout shift; content is visible without JS. */
+.reveal { opacity: 0; transform: translateY(14px); transition: opacity .3s ease-out, transform .3s ease-out; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
 .foot { max-width: 1120px; margin: clamp(56px, 8vw, 96px) auto 0; padding: 24px var(--gutter) 40px; border-top: 1px solid var(--border); font-size: 14px; color: var(--text-3); }
 
 @media (max-width: 860px) {
