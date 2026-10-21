@@ -166,6 +166,7 @@ export function demoStreams(activity) {
     const g = Math.max(-0.25, Math.min(0.25, grade));
     const v = Math.max(0.8, targetV * (1 - g * 3.2) * (0.97 + rand() * 0.06));
     hr += (targetHr * (1 + g * 1.1) - hr) * 0.08 + (rand() - 0.5) * 1.6;
+    hr = Math.min(hr, DEMO_PROFILE.hrMax - 2); // never above the athlete's own max
     dist += v * 5;
     time.push(t); heartrate.push(Math.round(hr)); velocity_smooth.push(+v.toFixed(2));
     distance.push(Math.round(dist));
