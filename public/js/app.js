@@ -146,6 +146,8 @@ async function loadData() {
     if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
     state.profile = data.profile;
     state.activities = data.activities;
+    const latest = data.activities[0]?.start_date_local?.slice(0, 10);
+    $('app-sub').textContent = `${data.athlete?.firstname || (state.mode === 'demo' ? 'Demo athlete' : 'Athlete')}${latest ? ` · data through ${latest}` : ''}`;
     $('loading').hidden = true;
     $('data').hidden = false;
     chartDefaults();
@@ -399,6 +401,12 @@ function initChat() {
   $('d-close').addEventListener('click', () => { $('detail').hidden = true; state.selectedId = null; document.querySelectorAll('.runs tr.sel').forEach((t) => t.classList.remove('sel')); });
   $('d-ask').addEventListener('click', () => send('Analyse the selected session: quality of the aerobic work, decoupling, time in zones, and what I should take away from it.'));
   $('logout-btn').addEventListener('click', async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/'; });
+  // The floating coach button is a shortcut to the coach; once the coach panel
+  // is on screen it only gets in the way (it covered the Send button).
+  const fab = document.querySelector('.coach-fab');
+  if (fab && 'IntersectionObserver' in window) {
+    new IntersectionObserver((es) => fab.classList.toggle('fab-hidden', es[0].isIntersecting), { threshold: 0.05 }).observe($('coach'));
+  }
 }
 
 let busy = false;
@@ -430,12 +438,26 @@ async function send(text) {
       addMsg('assistant', data.reply);
       if (data.model) $('chat-model').textContent = data.model;
     } else {
-      const answer = await readCoachStream(r.body, (label) => steps.add(label));
+      let bubble = null;
+      let acc = '';
+      const answer = await readCoachStream(r.body, {
+        onStep: (label) => steps.add(label),
+        onDelta: (t) => {
+          typing.remove();
+          acc += t;
+          if (!bubble) bubble = addMsg('assistant', '');
+          bubble.innerHTML = renderMarkdown(acc);
+          bubble.classList.add('streaming');
+          $('chat-log').scrollTop = $('chat-log').scrollHeight;
+        },
+      });
       typing.remove();
+      if (bubble) bubble.classList.remove('streaming');
       if (!answer.text) steps.remove(); else steps.finish();
       if (answer.error) throw new Error(answer.error);
       state.chat.push({ role: 'assistant', content: answer.text });
-      addMsg('assistant', answer.text);
+      if (bubble) bubble.innerHTML = renderMarkdown(answer.text); // authoritative final text
+      else addMsg('assistant', answer.text);
       if (answer.model) $('chat-model').textContent = answer.model;
     }
   } catch (e) {
@@ -482,8 +504,9 @@ function addSteps() {
 }
 
 // Reads the coach's event stream: {type:'step'} while the agent fetches data,
-// one final {type:'reply'} (or {type:'error'}). Resolves with the reply payload.
-async function readCoachStream(body, onStep) {
+// {type:'delta'} text chunks as the reply is written, then one final
+// {type:'reply'} (or {type:'error'}). Resolves with the reply payload.
+async function readCoachStream(body, { onStep, onDelta } = {}) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
@@ -499,7 +522,8 @@ async function readCoachStream(body, onStep) {
       if (!line) continue;
       let obj;
       try { obj = JSON.parse(line.slice(6)); } catch { continue; }
-      if (obj.type === 'step') onStep(obj.label);
+      if (obj.type === 'step') onStep?.(obj.label);
+      else if (obj.type === 'delta') onDelta?.(obj.text);
       else if (obj.type === 'reply' || obj.type === 'error') answer = obj;
     }
   }

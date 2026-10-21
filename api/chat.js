@@ -60,7 +60,11 @@ export default handler(['POST'], async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
     try {
-      const out = await runCoachAgent({ client, model, system, messages, ctx, onStep: (label) => send({ type: 'step', label }) });
+      const out = await runCoachAgent({
+        client, model, system, messages, ctx,
+        onStep: (label) => send({ type: 'step', label }),
+        onText: (t) => send({ type: 'delta', text: t }),
+      });
       send({ type: 'reply', text: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
     } catch (e) {
       console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
