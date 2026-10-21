@@ -335,3 +335,30 @@ test('race readiness works on the demo dataset', () => {
   assert.ok(r.parts.distance.have > 15, `longest ${r.parts.distance.have}`);
   assert.match(r.sentence, /gap/);
 });
+
+// ---------- Climbing-speed guard ----------
+test('climb trend: fewer than 4 climbing weeks gives no line and no number', () => {
+  const weeks = Array.from({ length: 12 }, (_, i) => ({ week: `2026-08-${String(i + 1).padStart(2, '0')}`, vertMph: i === 3 ? 600 : i === 5 ? 650 : null }));
+  const t = A.climbTrend(weeks);
+  assert.equal(t.enough, false);
+  assert.equal(t.weeksWithData, 2);
+  assert.ok(t.points.every((p) => p.rolling == null));
+  assert.equal(A.climbNowOf(t), null);
+});
+
+test('climb trend: rolling line stops at the last real week', () => {
+  const weeks = Array.from({ length: 12 }, (_, i) => ({ week: `w${i}`, vertMph: i < 6 ? 500 + i * 10 : null }));
+  const t = A.climbTrend(weeks);
+  assert.equal(t.enough, true);
+  assert.ok(t.points.slice(6).every((p) => p.rolling == null));
+  assert.ok(t.points[5].rolling != null);
+  assert.equal(A.climbNowOf(t), t.points[5].rolling);
+});
+
+// ---------- Easy-share colour rule ----------
+test('easy share: two levels only, green at 80%+ and ochre below', () => {
+  assert.equal(A.easyShareLevel(null), 'neutral');
+  for (const p of [100, 90, 80]) assert.equal(A.easyShareLevel(p), 'good');
+  for (const p of [79, 71, 68, 66, 40]) assert.equal(A.easyShareLevel(p), 'warning');
+  for (const p of [90, 80, 79, 71, 66, 40]) assert.equal(A.easyShareReading(p).level, A.easyShareLevel(p));
+});

@@ -160,7 +160,7 @@ button { font: inherit; cursor: pointer; }
 .today-chip.good { background: var(--moss); }
 .today-chip.neutral { background: var(--text); }
 .today-chip.warning { background: var(--warning); }
-.today-chip.serious { background: var(--serious); }
+.today-chip.serious { background: var(--text); }
 .today-sentence { font-size: clamp(15px, 1.5vw, 17px); line-height: 1.5; color: var(--text); max-width: 58ch; }
 .today-nums { display: flex; gap: clamp(14px, 2.4vw, 28px); flex-shrink: 0; }
 .today-nums div { display: flex; flex-direction: column; }
@@ -205,7 +205,8 @@ button { font: inherit; cursor: pointer; }
 .easybar-row { display: grid; grid-template-columns: 92px 1fr 110px; align-items: center; gap: 12px; font-size: 12px; color: var(--text-2); }
 .easybar-track { position: relative; height: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
 .easybar-fill { position: absolute; inset: 0 auto 0 0; background: var(--text); border-radius: 99px; }
-.easybar-fill.low { background: var(--serious); }
+.easybar-fill.good { background: var(--good); }
+.easybar-fill.warning { background: var(--warning); }
 .easybar-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--moss); }
 .easybar-row b { font-variant-numeric: tabular-nums; text-align: right; }
 .easybar-row b span { font-weight: 400; color: var(--text-3); font-size: 11px; }
@@ -221,7 +222,7 @@ button { font: inherit; cursor: pointer; }
 .race-part .lbl { color: var(--text-3); }
 .race-part b { font-variant-numeric: tabular-nums; }
 .race-part .st-ok { color: var(--moss); }
-.race-part .st-gap { color: var(--ochre, var(--serious)); }
+.race-part .st-gap { color: var(--warning); }
 @media (max-width: 560px) { .race-part { grid-template-columns: 118px 1fr auto; } }
 
 /* ---------- Sessions table ---------- */

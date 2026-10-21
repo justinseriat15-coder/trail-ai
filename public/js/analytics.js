@@ -221,7 +221,7 @@ export function buildSummary(activities, { hrMax, hrRest, now = new Date(), perA
   const es = easyShare(activities.map((a) => ({ ...a, zoneSecs: perActivity[a.id]?.zoneSecs || null })), now);
   const eng = aerobicEngine(activities, hrMax);
   const climb = climbTrend(weeklyClimbSpeed(activities, perActivity, 12, now));
-  const climbNow = [...climb.points].reverse().find((w) => w.rolling != null)?.rolling ?? null;
+  const climbNow = climbNowOf(climb);
   const weeks = weeklyVolume(activities, 8, now);
   return {
     hrMax, hrRest,
@@ -273,7 +273,7 @@ export const METRIC_INFO = {
   easy: {
     name: 'Easy share',
     what: 'Percentage of running time spent in heart-rate zones 1-2, from sessions with heart-rate data.',
-    meaning: 'Around 80% easy keeps hard days hard and easy days easy. Much below that usually means easy days are too fast.',
+    meaning: 'Around 80% easy keeps hard days hard and easy days easy. Green at 80% or more, ochre below.',
   },
   climb: {
     name: 'Climbing speed',
@@ -365,15 +365,24 @@ export function easyShare(annotated, now = new Date()) {
   return { d7: agg(7), d28: agg(28) };
 }
 
-export function easyShareReading(pct, target = 80) {
-  if (pct == null) return { label: 'no HR data', level: 'neutral' };
-  if (pct >= target) return { label: `${pct}% easy: on target`, level: 'good' };
-  if (pct >= target - 12) return { label: `${pct}% easy: close`, level: 'warning' };
-  return { label: `${pct}% easy: too much grey zone`, level: 'serious' };
+// One rule for every easy-share colour (KPI dot, bars, text), two levels only:
+// 80% or more is on target (moss green), below 80% is ochre. Red is reserved
+// for the athlete's own data and actions, never an alarm.
+export const EASY_TARGET = 80;
+export function easyShareLevel(pct, target = EASY_TARGET) {
+  if (pct == null) return 'neutral';
+  return pct >= target ? 'good' : 'warning';
+}
+
+export function easyShareReading(pct, target = EASY_TARGET) {
+  const level = easyShareLevel(pct, target);
+  if (level === 'neutral') return { label: 'no HR data', level };
+  if (level === 'good') return { label: `${pct}% easy: on target`, level };
+  return { label: `${pct}% easy: below target`, level };
 }
 
 // Sustained climbs from altitude + distance streams: gain >= 50 m at an
-// average grade >= 5%, with 60 s altitude smoothing (barometer/GPS noise).
+// average grade >= 3%, with 60 s altitude smoothing (barometer/GPS noise).
 export function climbSegments(streams, { minGain = 50, minGrade = 0.03, minDescent = 10 } = {}) {
   const { time, distance: dist, altitude: alt } = streams || {};
   if (!time || !dist || !alt || time.length < 20) return [];
@@ -436,25 +445,38 @@ export function weeklyClimbSpeed(activities, perActivity = {}, weeks = 12, now =
   });
 }
 
-// Climbing-speed trend from weekly vertMph values: a rolling 3-week median
-// line (robust to one-off weeks), and change = mean of first 4 vs last 4
-// weeks with data.
+// Climbing-speed trend from weekly vertMph values. Needs MIN_CLIMB_WEEKS weeks
+// with sustained climbs before it draws a line or states a trend (same idea as
+// the aerobic engine guard): two points are a coincidence, not a trend.
+// The rolling line is a 3-week median that exists only on weeks with data, so
+// it never extends past the last real point. change = mean of first 4 vs last
+// 4 weeks with data (needs 6).
+export const MIN_CLIMB_WEEKS = 4;
 export function climbTrend(perWeek) {
   const pts = perWeek.map((w) => ({ ...w }));
   const vals = pts.map((w) => w.vertMph);
-  const med = vals.map((_, i) => {
-    const win = vals.slice(Math.max(0, i - 2), i + 1).filter((v) => v != null).sort((a, b) => a - b);
+  const have = pts.filter((w) => w.vertMph != null);
+  const enough = have.length >= MIN_CLIMB_WEEKS;
+  const med = vals.map((v, i) => {
+    if (!enough || v == null) return null;
+    const win = vals.slice(Math.max(0, i - 2), i + 1).filter((x) => x != null).sort((a, b) => a - b);
     return win.length ? win[Math.floor(win.length / 2)] : null;
   });
   pts.forEach((w, i) => { w.rolling = med[i]; });
-  const have = pts.filter((w) => w.vertMph != null);
   let changePct = null;
   if (have.length >= 6) {
     const avg = (arr) => arr.reduce((t, w) => t + w.vertMph, 0) / arr.length;
     const first = avg(have.slice(0, 4)), last = avg(have.slice(-4));
     changePct = +(((last - first) / first) * 100).toFixed(1);
   }
-  return { points: pts, changePct };
+  return { points: pts, changePct, enough, weeksWithData: have.length };
+}
+
+// The number shown as "climbing speed now": latest rolling value, or null while
+// there are too few climbing weeks.
+export function climbNowOf(trend) {
+  if (!trend.enough) return null;
+  return [...trend.points].reverse().find((w) => w.rolling != null)?.rolling ?? null;
 }
 
 export function aerobicEngine(activities, hrMax) {
