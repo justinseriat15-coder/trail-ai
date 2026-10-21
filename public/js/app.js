@@ -571,9 +571,9 @@ function subChart(pts, get, cls, unit, W, X, reverse = false) {
   const svg = mk('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${unit} over the session` });
   const line = pts.filter((p) => get(p) != null).map((p) => [X(p.km), Y(get(p))]);
   mk('path', { d: pathFrom(line), class: cls }, svg);
-  const loT = mk('text', { x: W - 2, y: Y(lo) + 3, 'text-anchor': 'end', class: 'phero-tick' }, svg);
+  const loT = mk('text', { x: W - 2, y: Math.min(H - 4, Y(lo) + 10), 'text-anchor': 'end', class: 'phero-tick' }, svg);
   loT.textContent = unit === 'bpm' ? `${Math.round(lo)} bpm` : `${paceFromMinPerKm(lo)}`;
-  const hiT = mk('text', { x: W - 2, y: Y(hi) - 3, 'text-anchor': 'end', class: 'phero-tick' }, svg);
+  const hiT = mk('text', { x: W - 2, y: Math.max(11, Y(hi) - 4), 'text-anchor': 'end', class: 'phero-tick' }, svg);
   hiT.textContent = unit === 'bpm' ? `${Math.round(hi)} bpm` : `${paceFromMinPerKm(hi)}`;
   return svg;
 }
