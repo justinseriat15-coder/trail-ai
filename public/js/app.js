@@ -361,6 +361,7 @@ function render() {
         x: { ...gridX, ticks: { maxTicksLimit: 4, callback(v) { return dayStr(this.getLabelForValue(v) + 'T12:00:00').slice(4); } } },
         y: { ...gridY, reverse: true, ticks: { maxTicksLimit: 4, callback: (val) => { const m = Math.floor(val / 60); return `${m}:${String(Math.round(val % 60)).padStart(2, '0')}`; } } },
       },
+      layout: { padding: { right: 64 } },
       plugins: { endLabel: { dataset: 1, text: eng.latestSecPerKm ? `${Math.floor(eng.latestSecPerKm / 60)}:${String(Math.round(eng.latestSecPerKm % 60)).padStart(2, '0')}/km` : '', color: css('--brand-2') }, tooltip: { callbacks: {
         title: (it) => dayStr(ep[it[0].dataIndex].date + 'T12:00:00'),
         label: (it) => { const sec = it.raw; return `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}/km at ${eng.refHr} bpm${it.datasetIndex === 1 ? ' (rolling)' : ''}`; },
