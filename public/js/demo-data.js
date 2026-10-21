@@ -182,7 +182,8 @@ export function demoStreams(activity) {
   // Pass 2: pace and HR against the real grade of that terrain.
   // Grade is smoothed over ~30 s; pace follows it quickly, HR follows slowly
   // (real HR rises over 1-2 min into a climb, falls faster on the way down).
-  // Steep ground means hiking: no artificial pace floor.
+  // Pace-vs-grade curve, HR response, pauses and noise calibrated against
+  // real trail-running stream data (36 runs, Oct 2026).
   const isInt = activity._kind === 'intervals';
   const SG = 6; // 6 samples * 5 s = 30 s smoothing
   const smGrade = (i) => {
@@ -193,10 +194,34 @@ export function demoStreams(activity) {
     }
     return n ? acc / n : 0;
   };
-  let dist = 0, hr = 105;
+  // Measured pace factor (sec/km relative to flat) per smoothed grade.
+  // Descents are NOT faster: runners hold back downhill (factor >= 1).
+  const PACE_CURVE = [
+    [-0.25, 1.18], [-0.10, 1.10], [-0.05, 1.06], [-0.03, 1.02], [-0.01, 0.98],
+    [0, 1.0], [0.01, 1.01], [0.02, 1.08], [0.03, 1.13], [0.04, 1.27],
+    [0.05, 1.51], [0.06, 1.8], [0.08, 2.3], [0.10, 2.8], [0.12, 3.3], [0.25, 4.2],
+  ];
+  const paceFactor = (g) => {
+    for (let k = 0; k < PACE_CURVE.length - 1; k++) {
+      const [g0, f0] = PACE_CURVE[k], [g1, f1] = PACE_CURVE[k + 1];
+      if (g >= g0 && g <= g1) return f0 + ((f1 - f0) * (g - g0)) / (g1 - g0);
+    }
+    return PACE_CURVE[PACE_CURVE.length - 1][1];
+  };
+  // Measured pauses: ~2.6 stops per hour, median ~18 s. Schedule them up
+  // front (not during intervals), then hold speed at 0 through each stop.
+  const stops = [];
+  if (!isInt && activity.moving_time > 1200) {
+    const nStops = Math.max(0, Math.round((activity.moving_time / 3600) * 2.6 * (0.6 + rand() * 0.8)));
+    for (let k = 0; k < nStops; k++) {
+      const at = 600 + Math.floor(rand() * Math.max(1, activity.moving_time - 900));
+      stops.push({ start: at, end: at + 10 + Math.round(rand() * 16) }); // 10-26 s, median ~18 s
+    }
+  }
+  const stoppedAt = (t) => stops.some((s) => t >= s.start && t < s.end);
+  let dist = 0, hr = 105, t = 0;
   const vRaw = [];
   for (let i = 0; i < N; i++) {
-    const t = i * 5;
     const frac = i / N;
     let targetV = activity.average_speed;
     let targetHr = activity.average_heartrate * (1 - (activity._drift || 0.03) / 2 + (activity._drift || 0.03) * frac);
@@ -207,13 +232,22 @@ export function demoStreams(activity) {
     }
     if (t < 600) { targetV *= 0.9; targetHr *= 0.9 + 0.1 * (t / 600); }
     const g = Math.max(-0.25, Math.min(0.25, smGrade(i)));
-    const floor = g > 0.12 ? 0.45 : 0.8; // hiking on steep ground
-    const v = Math.max(floor, targetV * (1 - g * 3.2) * (0.97 + rand() * 0.06));
-    const hrTarget = Math.min(targetHr * (1 + g * 1.1), DEMO_PROFILE.hrMax - 2);
-    const rate = hrTarget > hr ? 0.045 : 0.12; // rise ~110 s, fall ~40 s
+    let v, hrT;
+    if (stoppedAt(t)) {
+      v = 0;
+      hrT = DEMO_PROFILE.hrRest + (hr - DEMO_PROFILE.hrRest) * 0.7; // recovery during a stop
+    } else {
+      const floor = g > 0.12 ? 1.0 : 0.8; // hiking on steep ground is still ~1 m/s, not a crawl
+      v = Math.max(floor, (targetV / paceFactor(g)) * (0.94 + rand() * 0.12));
+      hrT = targetHr * (1 + g * 1.1);
+    }
+    const hrTarget = Math.min(hrT, DEMO_PROFILE.hrMax - 2);
+    // Measured HR lag: rise tau ~42 s, fall tau ~26 s (per 5 s sample).
+    const rate = hrTarget > hr ? 0.115 : 0.19;
     hr += (hrTarget - hr) * rate + (rand() - 0.5) * 1.2;
     hr = Math.min(hr, DEMO_PROFILE.hrMax - 2); // never above the athlete's own max
     dist += v * 5;
+    t += 5;
     vRaw.push(v);
     time.push(t); heartrate.push(Math.round(hr));
     distance.push(dist);
@@ -224,7 +258,8 @@ export function demoStreams(activity) {
   for (let i = 0; i < N; i++) {
     let acc = 0, n = 0;
     for (let j = Math.max(0, i - SG + 1); j <= i; j++) { acc += vRaw[j]; n++; }
-    velocity_smooth.push(+(Math.max(0.4, (acc / n) * scale)).toFixed(2));
+    // Smoothing is trailing: a stop reads as 0 during the stop, then pace ramps back up.
+    velocity_smooth.push(stoppedAt(time[i]) ? 0 : +(Math.max(0.4, (acc / n) * scale)).toFixed(2));
     distance[i] = Math.round(distance[i] * scale);
   }
   distance[N - 1] = activity.distance;
