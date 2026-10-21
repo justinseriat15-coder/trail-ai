@@ -178,11 +178,13 @@
 
         <div class="card" data-metric="race">
           <div class="card-head"><h2>Race readiness</h2><span class="card-note" id="race-note">target: fictional 50 km · 2,500 m D+</span></div>
-          <div class="race-gauge">
+          <div class="race-lead" id="race-lead"><span>Limiting factor</span><b id="race-limit">—</b></div>
+          <div class="race-gauge" id="race-gauge">
             <div class="race-track"><div class="race-fill" id="race-fill"></div></div>
             <b id="race-pct">—</b>
           </div>
           <div class="race-parts" id="race-parts"></div>
+          <p class="race-context" id="race-context"></p>
           <p class="card-foot" id="race-sentence"></p>
         </div>
 
@@ -222,6 +224,7 @@
         <button data-q="How does my load compare to usual?">Load vs usual</button>
         <button data-q="How is my climbing speed trending?">Climbing</button>
         <button data-q="Am I running easy enough? Check my easy share.">Easy share</button>
+        <button data-q="Am I ready for my race? What is the limiting factor?">Race readiness</button>
       </div>
       <form class="chat-input" id="chat-form">
         <textarea id="chat-text" rows="1" maxlength="2000" placeholder="Tell me about your session…" aria-label="Message to the coach"></textarea>

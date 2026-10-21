@@ -7,5 +7,5 @@ export default handler(['GET'], async (req, res) => {
   const source = query(req).source === 'live' ? 'live' : 'demo';
   const ctx = await loadAthlete(req, res, source);
   const insights = await computeInsights(ctx);
-  json(res, 200, { mode: ctx.mode, athlete: { firstname: ctx.athlete?.firstname }, profile: ctx.profile, activities: ctx.publicActivities, insights });
+  json(res, 200, { mode: ctx.mode, athlete: { firstname: ctx.athlete?.firstname }, profile: ctx.profile, activities: ctx.publicActivities, insights, race: ctx.race });
 });

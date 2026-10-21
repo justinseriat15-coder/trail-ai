@@ -156,6 +156,7 @@ async function loadData() {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
     state.profile = data.profile;
+    state.race = data.race || null;
     state.activities = data.activities;
     state.insights = data.insights || { perActivity: {} };
     const latest = data.activities[0]?.start_date_local?.slice(0, 10);
@@ -175,6 +176,60 @@ async function loadData() {
 // Annotate activities with stream-derived zone seconds from the server.
 function annotatedActivities() {
   return state.activities.map((a) => ({ ...a, zoneSecs: state.insights.perActivity[a.id]?.zoneSecs || null }));
+}
+
+
+// ---------- Race readiness ----------
+// The target comes from the server: the fictional race in demo, the owner's
+// RACE_TARGET setting in live mode (same on every device, nothing stored in the browser).
+function renderRace(acts, climbNow) {
+  const race = state.race;
+  const fmtN = (n) => n.toLocaleString('en-GB');
+  $('race-context').textContent = '';
+  if (!race) {
+    $('race-note').textContent = 'no race set';
+    $('race-limit').textContent = 'No race set yet';
+    $('race-gauge').hidden = true;
+    $('race-parts').replaceChildren();
+    $('race-sentence').textContent = 'Readiness is checked against a target race. It shows up here once a race is set.';
+    if (tipRefs.race) tipRefs.race.live.textContent = 'No race set yet.';
+    return;
+  }
+  const rr = raceReadiness(acts, { race, climbNow });
+  $('race-note').textContent = `target: ${race.name} · ${race.distanceKm} km · ${fmtN(race.dplusM)} m D+${race.hours ? ` · ${race.hours} h` : ''}`;
+  $('race-gauge').hidden = rr.score == null;
+  const lead = $('race-limit');
+  if (rr.limiting == null) lead.textContent = 'Not enough data yet';
+  else if (rr.limiting.pct >= 100) lead.textContent = 'No weak link';
+  else { lead.textContent = rr.limiting.label; const sm = document.createElement('small'); sm.textContent = `${rr.limiting.pct}% of target`; lead.append(sm); }
+  const rfill = $('race-fill');
+  rfill.style.width = rr.score == null ? '0' : `${rr.score}%`;
+  rfill.classList.toggle('full', rr.score === 100);
+  $('race-pct').textContent = rr.score == null ? '—' : `${rr.score}%`;
+  const partRows = [
+    [rr.parts.distance.unit === 'h' ? 'Longest run, 12 weeks' : 'Long run, 12 weeks', rr.parts.distance, (p) => `${p.have} ${p.unit} of ${p.need} ${p.unit}`],
+    ['Biggest D+ week', rr.parts.vertWeek, (p) => `${fmtN(p.have)} m of ${fmtN(p.need)} m`],
+  ];
+  $('race-parts').replaceChildren(...partRows.map(([lbl, p, fmt]) => {
+    const row = document.createElement('div');
+    row.className = 'race-part';
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = lbl;
+    const track = document.createElement('div'); track.className = 'easybar-track';
+    const f = document.createElement('div');
+    f.className = 'easybar-fill';
+    f.style.width = `${p.pct}%`;
+    track.appendChild(f);
+    const v = document.createElement('b');
+    v.textContent = fmt(p);
+    v.className = p.pct >= 100 ? 'st-ok' : 'st-gap';
+    row.append(l, track, v);
+    return row;
+  }));
+  $('race-context').textContent = rr.context.climbSpeed == null
+    ? 'Context, not scored: climbing speed needs more climbs.'
+    : `Context, not scored: climbing speed ${rr.context.climbSpeed} m/h on sustained climbs in training.`;
+  $('race-sentence').textContent = `${rr.sentence} Rules of thumb, not a prediction.`;
+  if (tipRefs.race) tipRefs.race.live.textContent = rr.sentence;
 }
 
 // ---------- Dashboard ----------
@@ -393,37 +448,9 @@ function render() {
     ? 'Needs sessions recorded with heart rate.'
     : `Target ~80% easy (green at 80% or more, ochre below). ${esr.label}. Based on ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data in 28 days.`;
 
-  // --- Race readiness (fictional target race)
-  const rr = raceReadiness(acts, { climbNow });
-  $('race-note').textContent = `target: ${rr.race.name} · ${rr.race.distanceKm} km · ${rr.race.dplusM.toLocaleString('en-GB')} m D+`;
-  const rfill = $('race-fill');
-  rfill.style.width = rr.overall == null ? '0' : `${rr.overall}%`;
-  rfill.classList.toggle('full', rr.overall === 100);
-  $('race-pct').textContent = rr.overall == null ? '—' : `${rr.overall}%`;
-  const partRows = [
-    ['Longest run, 12 weeks', rr.parts.distance, (p) => `${p.have} km of ${p.need} km`],
-    ['Biggest D+ week', rr.parts.vertWeek, (p) => `${p.have.toLocaleString('en-GB')} m of ${p.need.toLocaleString('en-GB')} m`],
-    ['Climbing speed', rr.parts.climb, (p) => (p ? `${p.have} m/h of ~${p.need} m/h` : 'no climbs measured')],
-  ];
-  $('race-parts').replaceChildren(...partRows.map(([lbl, p, fmt]) => {
-    const row = document.createElement('div');
-    row.className = 'race-part';
-    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = lbl;
-    const track = document.createElement('div'); track.className = 'easybar-track';
-    if (p) {
-      const f = document.createElement('div');
-      f.className = 'easybar-fill';
-      f.style.width = `${p.pct}%`;
-      track.appendChild(f);
-    }
-    const v = document.createElement('b');
-    v.textContent = fmt(p);
-    if (p) v.className = p.pct >= 100 ? 'st-ok' : 'st-gap';
-    row.append(l, track, v);
-    return row;
-  }));
-  $('race-sentence').textContent = rr.sentence;
-  if (tipRefs.race) tipRefs.race.live.textContent = rr.sentence;
+  // --- Race readiness: weakest link against the target race
+  // Demo: the fictional race. Live: the athlete's own race, saved in this browser.
+  renderRace(acts, climbNow);
 
   // --- Recent sessions
   const tbody = $('runs');

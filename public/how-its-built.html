@@ -71,6 +71,8 @@
       <li><b>Cardiac drift</b> - heart-rate rise across a steady flat run, after warm-up. Under 5% means durable endurance.</li>
     </ul>
     <p>Behind the plain names are standard sports-science tools: a Banister heart-rate load, acute-to-chronic load ratio and efficiency factor. They stay inside the engine; the interface and the coach never use the jargon.</p>
+    <h3>Race readiness, scored by the weakest link</h3>
+    <p>Two rules of thumb over the last 12 weeks against a target race: longest run (against two thirds of the race distance up to 60 km, and against about 5.5 hours of time on feet for ultras, where the distance rule stops scaling) and biggest climbing week against the race D+. There is no average, because an average hides the problem: the score is the weaker of the two and the card leads with the limiting factor. Climbing speed is shown for context only, since training speed on short fresh climbs is not comparable to race-average speed. The demo uses a fictional race; the owner's real race lives in a server-side setting, never in the browser, so the coach only ever sees server-side data.</p>
   </section>
 
   <section>
@@ -78,7 +80,7 @@
     <p>One model call decides for itself what it needs. There is no router and no forced tool use: the system prompt carries a cached summary of the athlete's current state (load vs usual, easy share, climbing speed, aerobic engine, last 15 sessions), which answers most questions on its own. For anything beyond that, the model has three tools:</p>
     <div class="toolcard"><b>list_activities</b><p>Sessions in any date window, filtered by sport. Covers history, specific months and period comparisons.</p></div>
     <div class="toolcard"><b>get_activity_details</b><p>Second-by-second analysis of one session: zones, kilometre splits, laps, cardiac drift.</p></div>
-    <div class="toolcard"><b>compute_stats</b><p>Deterministic metrics - summary, climbing-speed trend, aerobic-engine trend, weekly volume - computed by the same functions the dashboard uses.</p></div>
+    <div class="toolcard"><b>compute_stats</b><p>Deterministic metrics - summary, climbing-speed trend, aerobic-engine trend, weekly volume, race readiness - computed by the same functions the dashboard uses.</p></div>
     <p>The loop is capped at eight model calls per question, and the final call is always made without tools, so the model must end in a written answer. Live Strava calls are separately budgeted at six per question, which keeps latency and API usage predictable.</p>
     <h3>Honest progress, live text</h3>
     <p>The "Fetching activities…" lines in the chat are built only from the model's tool-call blocks - name and inputs - so the interface shows what the agent actually did, never what it claimed it would do. The answer itself is streamed token by token over server-sent events, on top of the agent's steps.</p>
@@ -103,7 +105,7 @@
 
   <section>
     <h2>How it's tested</h2>
-    <p>53 unit and integration tests (<code>node:test</code>, no framework) cover the metrics functions, the session crypto, and the whole agent loop against a mock model - tool selection, visible-step labels, streaming, budgets and the forced final answer. On top of that, a 10-question evaluation harness (<code>npm run eval</code>) runs real questions through the real model against demo data, checking that the coach reaches for the right tool for each kind of question.</p>
+    <p>62 unit and integration tests (<code>node:test</code>, no framework) cover the metrics functions, race readiness, the session crypto, and the whole agent loop against a mock model - tool selection, visible-step labels, streaming, budgets and the forced final answer. On top of that, an 11-question evaluation harness (<code>npm run eval</code>) runs real questions through the real model against demo data, checking that the coach reaches for the right tool for each kind of question.</p>
     <p>Every change ships the same way: a branch, tests green, the Vercel preview checked on desktop and mobile, and only then a merge - the live site is on my CV, so it doesn't break.</p>
   </section>
 

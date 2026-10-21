@@ -18,6 +18,8 @@ A Today verdict (train, easy day or rest) in one sentence, five plain metrics be
 | **Aerobic engine** | Pace at your easy heart rate, from flat easy runs of 20 minutes or more | If this gets faster at the same heart rate, the aerobic base is improving. |
 | **Cardiac drift** (per session) | Heart rate rise in the second half of a steady flat run vs the first, after warm-up | Under 5% means durable endurance at that duration. |
 
+**Race readiness** checks two rules of thumb over the last 12 weeks against a target race: longest run (vs 2/3 of the race distance up to 60 km; for ultras the rule switches to time on feet, about 5.5 h) and biggest week of climbing vs the race D+. There is no average: the score is the weaker of the two, and the card leads with the limiting factor. Climbing speed is shown as context only, because training speed on short fresh climbs is not comparable to race-average climbing speed. The demo uses a fictional 50 km / 2,500 m race; live mode reads the owner's race from the `RACE_TARGET` setting.
+
 Internally the model uses heart-rate load (a Banister-style impulse), acute vs chronic load and efficiency factor; the interface and the coach only use the plain terms above.
 
 ## Architecture
@@ -53,7 +55,7 @@ tests/             node:test unit tests (metrics, session crypto, agent loop) + 
 
 ## The coach agent
 
-One model call decides for itself what it needs: no router, no forced tool use. The cached system prompt covers current state (load, trends, last ~15 sessions); three tools cover the rest - `list_activities` (any date window), `get_activity_details` (second-by-second zones, splits, laps, cardiac drift) and `compute_stats` (the same deterministic functions the dashboard uses: summary, climbing and engine trends, weekly volume). The loop is capped at 8 model calls and always ends on a call without tools, so it must produce a written answer. Live Strava calls are budgeted at 6 per question. The visible steps in the chat are built only from the model's `tool_use` blocks, and the reply is streamed as server-sent events.
+One model call decides for itself what it needs: no router, no forced tool use. The cached system prompt covers current state (load, trends, last ~15 sessions); three tools cover the rest - `list_activities` (any date window), `get_activity_details` (second-by-second zones, splits, laps, cardiac drift) and `compute_stats` (the same deterministic functions the dashboard uses: summary, climbing and engine trends, weekly volume, race readiness). The loop is capped at 8 model calls and always ends on a call without tools, so it must produce a written answer. Live Strava calls are budgeted at 6 per question. The visible steps in the chat are built only from the model's `tool_use` blocks, and the reply is streamed as server-sent events.
 
 ## Design decisions
 
@@ -71,6 +73,7 @@ One model call decides for itself what it needs: no router, no forced tool use. 
 
 ## Known limits and next steps
 
+- Race readiness thresholds (long run at 2/3 of distance, biggest week of D+ equal to race D+) are rules of thumb, not a prediction.
 - The aerobic engine does not use grade-adjusted pace; hilly runs are excluded rather than corrected. Next: grade-adjusted speed from altitude streams.
 - %HRmax zones are a simplification; a lactate or ventilatory threshold test would personalize them.
 - Strava apps start in single-athlete mode; multi-user access requires Strava's app review.
@@ -93,6 +96,7 @@ npm test
 | `ANTHROPIC_API_KEY` | coach | Claude API key |
 | `ANTHROPIC_MODEL`, `ANTHROPIC_DEMO_MODEL` | no | model overrides |
 | `OWNER_ATHLETE_ID`, `HR_MAX`, `HR_REST`, `ATHLETE_CONTEXT` | no | owner-only personalization |
+| `RACE_TARGET` | no | owner's target race as JSON, e.g. `{"name":"My 50K","km":50,"dplus":2500,"hours":8}`. Server-side, same on every device. Without it live mode shows no race. |
 | `APP_URL` | no | canonical URL for the OAuth redirect |
 
 ---
