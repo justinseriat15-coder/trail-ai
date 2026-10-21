@@ -323,7 +323,7 @@ function render() {
       labels: weeks.map((w) => label(w.week)),
       datasets: [{
         label: 'Hours', data: weeks.map((w) => w.hours),
-        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.82)')),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : (css('--bar-strong') || 'rgba(232,230,223,.86)'))),
         borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
       }],
     },
@@ -347,7 +347,7 @@ function render() {
       labels: weeks.map((w) => label(w.week)),
       datasets: [{
         label: 'D+', data: weeks.map((w) => w.dplus),
-        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.38)')),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : (css('--bar-soft') || 'rgba(150,182,208,.72)'))),
         borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
       }],
     },
@@ -587,22 +587,19 @@ function buildHero(streams, climbs) {
   const yMin = Math.min(...pts.map((p) => p.alt));
   const yMax = Math.max(...pts.map((p) => p.alt));
   const ySpan = (yMax - yMin) || 1;
-  const X = (kmv) => (kmv / xMax) * W;
+  const plotW = W - 48; // right gutter keeps the HR and pace labels off the lines
+  const X = (kmv) => (kmv / xMax) * plotW;
   const Y = (av) => padT + (1 - (av - yMin) / ySpan) * (H - padT - padB);
 
   const svg = mk('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Elevation profile of the session' });
-  const defs = mk('defs', {}, svg);
-  const grad = mk('linearGradient', { id: 'dgrad', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-  mk('stop', { offset: '0', 'stop-color': '#d63f17', 'stop-opacity': '.22' }, grad);
-  mk('stop', { offset: '1', 'stop-color': '#d63f17', 'stop-opacity': '0' }, grad);
 
-  // Climb highlights behind the line
-  for (const c of climbs) {
-    mk('rect', { x: X(c.startKm), y: padT - 14, width: Math.max(2, X(c.endKm) - X(c.startKm)), height: H - padT - padB + 14, class: 'phero-climb' }, svg);
-  }
-  // Area + line
+  // Line for the whole session; fill only under the climbs
   const line = pts.map((p) => [X(p.km), Y(p.alt)]);
-  mk('path', { d: `${pathFrom(line)} L${W},${H - padB + 8} L0,${H - padB + 8} Z`, class: 'phero-area' }, svg);
+  for (const c of climbs) {
+    const seg = pts.filter((p) => p.km >= c.startKm && p.km <= c.endKm).map((p) => [X(p.km), Y(p.alt)]);
+    if (seg.length < 2) continue;
+    mk('path', { d: `${pathFrom(seg)} L${seg.at(-1)[0]},${H - padB + 8} L${seg[0][0]},${H - padB + 8} Z`, class: 'phero-climb-area' }, svg);
+  }
   mk('path', { d: pathFrom(line), class: 'phero-line' }, svg);
 
   // Annotations: the biggest climbs, plus km ticks
@@ -611,8 +608,8 @@ function buildHero(streams, climbs) {
     const x = X(c.endKm);
     const altTop = pts.reduce((best, p) => (Math.abs(p.km - c.endKm) < Math.abs(best.km - c.endKm) ? p : best), pts[0]).alt;
     mk('circle', { cx: x, cy: Y(altTop), r: 4, class: 'phero-dot' }, svg);
-    const anchor = x > W - 120 ? 'end' : 'middle';
-    const tx = x > W - 120 ? x + 4 : x;
+    const anchor = x > plotW - 120 ? 'end' : 'middle';
+    const tx = x > plotW - 120 ? x + 4 : x;
     const t1 = mk('text', { x: tx, y: Y(altTop) - 22, 'text-anchor': anchor, class: 'phero-annot' }, svg);
     const sc1 = mk('tspan', { class: 'sc' }, t1); sc1.textContent = 'Climb';
     const rest1 = mk('tspan', {}, t1); rest1.textContent = ` · ${c.gain} m D+`;
@@ -620,7 +617,7 @@ function buildHero(streams, climbs) {
     t2.textContent = `${c.vertMph} m/h vertical`;
   });
   for (const tk of axisTicks(xMax)) {
-    const x = tk.anchor === 'start' ? 2 : tk.anchor === 'end' ? W - 2 : X(tk.km);
+    const x = tk.anchor === 'start' ? 2 : tk.anchor === 'end' ? plotW : X(tk.km);
     const t = mk('text', { x, y: H - 6, 'text-anchor': tk.anchor, class: 'phero-tick' }, svg);
     t.textContent = tk.label;
   }
