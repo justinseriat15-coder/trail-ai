@@ -163,3 +163,33 @@ function stepsStory() {
 }
 
 stepsStory();
+
+// Coach preview: scripted agent replay. When the chat scrolls into view the
+// first time, the status steps run in sequence (spinner -> check) and the
+// coach answer fades in. Zero model calls - the numbers are already on the
+// page from the demo endpoint; this only tells the story of how it got them.
+function agentReplay() {
+  const chat = document.querySelector('.pv-chat');
+  if (!chat) return;
+  const steps = [...chat.querySelectorAll('.pv-steps li')];
+  if (reducedMotion() || !steps.length) { steps.forEach((li) => li.classList.add('done')); return; }
+  chat.classList.add('replay');
+  let started = false;
+  const run = () => {
+    if (started) return;
+    started = true;
+    const STEP_MS = 780;
+    steps.forEach((li, i) => {
+      setTimeout(() => li.classList.add('on'), i * STEP_MS);
+      setTimeout(() => li.classList.add('done'), i * STEP_MS + STEP_MS - 120);
+    });
+    setTimeout(() => chat.classList.add('answered'), steps.length * STEP_MS + 150);
+  };
+  if (!('IntersectionObserver' in window)) { run(); return; }
+  const io = new IntersectionObserver((es) => {
+    if (es.some((e) => e.isIntersecting)) { io.disconnect(); run(); }
+  }, { threshold: 0.35 });
+  io.observe(chat);
+}
+
+agentReplay();
