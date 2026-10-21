@@ -6,6 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { handler, json, readJson, clientIp } from '../lib/http.js';
 import { loadAthlete, loadStreams } from '../lib/data.js';
+import { DEMO_RACE, sanitizeRace } from '../public/js/analytics.js';
 import { buildSystemPrompt } from '../lib/coach.js';
 import { computeInsights } from '../lib/insights.js';
 import { runCoachAgent } from '../lib/agent.js';
@@ -44,6 +45,9 @@ export default handler(['POST'], async (req, res) => {
   if (ctx.mode === 'demo' && !rateLimit('demo:global', { limit: 300, windowMs: 86400_000 }).ok) {
     return json(res, 429, { error: 'Daily demo quota reached.' });
   }
+
+  // Race target: fictional one in demo, the athlete's own (validated) in live mode, none if unset.
+  ctx.race = ctx.mode === 'demo' ? DEMO_RACE : sanitizeRace(body.race);
 
   let streams = null;
   if (body.activityId) streams = await loadStreams(ctx, body.activityId).catch(() => null);

@@ -212,6 +212,18 @@ button { font: inherit; cursor: pointer; }
 .easybar-row b span { font-weight: 400; color: var(--text-3); font-size: 11px; }
 @media (max-width: 560px) { .easybar-row { grid-template-columns: 74px 1fr 90px; } }
 
+.race-lead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.race-lead span { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1.5px; }
+.race-lead b { font-family: var(--sans); font-stretch: 85%; font-weight: 750; font-size: clamp(20px, 2.2vw, 26px); line-height: 1.15; }
+.race-lead b small { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--text-2); margin-left: 6px; }
+.race-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.race-form[hidden] { display: none; }
+.race-form label { display: grid; gap: 4px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; }
+.race-form input { font: inherit; font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; min-height: 44px; }
+.race-form input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.race-form-actions, .race-form .card-foot { grid-column: 1 / -1; }
+.race-form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.race-fill.good { background: var(--moss); }
 .race-gauge { display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: 12px; margin-bottom: 12px; }
 .race-track { position: relative; height: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
 .race-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--brand); border-radius: 99px; transition: width .5s ease; }
