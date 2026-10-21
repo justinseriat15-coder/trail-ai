@@ -95,3 +95,141 @@ test('every dashboard metric has a plain-language explanation', () => {
     assert.ok(A.METRIC_INFO[k]?.meaning?.length > 20, `${k} meaning`);
   }
 });
+
+// ---------- Phase 2: the five-question model ----------
+
+test('loadVsUsual: steady training reads ~0%, a spike reads high', () => {
+  const mk = (d, trimpLike = 1) => {
+    const t = new Date(NOW); t.setDate(t.getDate() - d);
+    return { type: 'Run', start_date_local: t.toISOString(), moving_time: 3600 * trimpLike, average_heartrate: 145, distance: 10000 };
+  };
+  const steady = [];
+  for (let d = 0; d < 35; d++) steady.push(mk(d));
+  const lv = A.loadVsUsual(steady, 200, 50, NOW);
+  assert.equal(lv.deltaPct, 0);
+  const spiky = steady.map((a, i) => (i < 7 ? { ...a, moving_time: a.moving_time * 2 } : a));
+  assert.equal(A.loadVsUsual(spiky, 200, 50, NOW).deltaPct, 100);
+  assert.equal(A.loadVsUsual([], 200, 50, NOW).deltaPct, null);
+});
+
+test('loadReading: bands map to the right tone', () => {
+  assert.equal(A.loadReading(null).level, 'neutral');
+  assert.equal(A.loadReading(9).level, 'good');
+  assert.equal(A.loadReading(20).level, 'warning');
+  assert.equal(A.loadReading(35).level, 'serious');
+  assert.equal(A.loadReading(60).level, 'serious');
+  assert.equal(A.loadReading(-20).level, 'good');
+});
+
+test('easyShare: aggregates zone seconds and reports coverage honestly', () => {
+  const mk = (d, zoneSecs) => {
+    const t = new Date(NOW); t.setDate(t.getDate() - d);
+    return { type: 'Run', start_date_local: t.toISOString(), zoneSecs };
+  };
+  const acts = [
+    mk(1, [1800, 600, 300, 0, 0]),   // 89% easy
+    mk(3, [600, 0, 0, 600, 0]),      // 50% easy
+    mk(10, null),                    // no HR: counted as session, not covered
+    mk(20, [2400, 0, 0, 0, 0]),      // 100% easy
+  ];
+  const es = A.easyShare(acts, NOW);
+  assert.equal(es.d7.sessions, 2);
+  assert.equal(es.d7.covered, 2);
+  assert.equal(es.d7.pct, 77); // (2400+600) / (2700+1200)
+  assert.equal(es.d28.sessions, 4);
+  assert.equal(es.d28.covered, 3);
+  assert.equal(A.easyShare([mk(1, null)], NOW).d7.pct, null);
+});
+
+test('climbSegments: finds a sustained 200 m climb, rejects short rollers', () => {
+  const time = [], distance = [], altitude = [];
+  for (let t = 0; t < 4000; t++) {
+    time.push(t); distance.push(t);
+    altitude.push(t < 1000 ? 100 : t < 3000 ? 100 + ((t - 1000) / 2000) * 200 : 300);
+  }
+  const segs = A.climbSegments({ time, distance, altitude });
+  assert.equal(segs.length, 1);
+  assert.ok(segs[0].gain >= 180 && segs[0].gain <= 210, `gain ${segs[0].gain}`);
+  assert.ok(segs[0].vertMph >= 300 && segs[0].vertMph <= 420, `vert ${segs[0].vertMph}`);
+  assert.ok(segs[0].endKm > segs[0].startKm);
+  // 30 m bumps never qualify
+  const rollAlt = altitude.map((a, i) => a + (i % 100 < 50 ? 30 : 0));
+  const flatRollers = { time: time.slice(0, 600), distance: distance.slice(0, 600), altitude: rollAlt.slice(0, 600).map((_, i) => (i % 100 < 50 ? 30 : 0)) };
+  assert.equal(A.climbSegments(flatRollers).length, 0);
+  assert.equal(A.climbSegments(null).length, 0);
+});
+
+test('climbingSpeed: null without enough climbing', () => {
+  assert.equal(A.climbingSpeed([]), null);
+  assert.equal(A.climbingSpeed([{ gain: 60, seconds: 100 }]), null); // < 5 min
+  assert.equal(A.climbingSpeed([{ gain: 200, seconds: 2000 }]), 360);
+});
+
+test('aerobicEngine: pace at easy HR from flat easy runs only', () => {
+  const mk = (d, speed = 10000 / 3000) => {
+    const t = new Date(NOW); t.setDate(t.getDate() - d);
+    return { id: d, type: 'Run', start_date_local: t.toISOString(), distance: 10000, moving_time: 10000 / speed, average_speed: speed, average_heartrate: 130, total_elevation_gain: 100 };
+  };
+  const runs = [];
+  for (let d = 0; d < 40; d += 3) runs.push(mk(d));
+  const eng = A.aerobicEngine(runs, 196);
+  assert.equal(eng.refHr, 145);
+  assert.ok(eng.points.length >= 10);
+  assert.ok(eng.latestSecPerKm > 0);
+  assert.ok(Math.abs(eng.changePct) < 2, `constant speed should read steady, got ${eng.changePct}`);
+  // faster later runs -> engine improving
+  const improving = runs.map((a) => ({ ...a, average_speed: a.average_speed * (a.id < 20 ? 1.15 : 1) }));
+  assert.ok(A.aerobicEngine(improving, 196).changePct > 3);
+  assert.equal(A.aerobicEngine([], 196).latestSecPerKm, null);
+});
+
+test('todayVerdict: load drives the decision, deterministically', () => {
+  assert.deepEqual(
+    (({ decision, tone }) => ({ decision, tone }))(A.todayVerdict({ deltaPct: 50, engineChangePct: 5, easySharePct: 80, hoursAgo: 48 })),
+    { decision: 'Rest', tone: 'serious' });
+  assert.deepEqual(
+    (({ decision, tone }) => ({ decision, tone }))(A.todayVerdict({ deltaPct: 35, engineChangePct: 5, easySharePct: 80, hoursAgo: 48 })),
+    { decision: 'Easy day', tone: 'warning' });
+  assert.deepEqual(
+    (({ decision, tone }) => ({ decision, tone }))(A.todayVerdict({ deltaPct: null, engineChangePct: null, easySharePct: null, hoursAgo: null })),
+    { decision: 'Easy day', tone: 'neutral' });
+  const ok = A.todayVerdict({ deltaPct: 5, engineChangePct: 6, easySharePct: 82, hoursAgo: 40 });
+  assert.equal(ok.decision, 'Train');
+  assert.equal(ok.tone, 'good');
+  assert.ok(ok.numbers.length >= 2);
+  const stale = A.todayVerdict({ deltaPct: 5, engineChangePct: -5, easySharePct: 80, hoursAgo: 40 });
+  assert.equal(stale.decision, 'Easy day'); // engine slipping overrides a fine load
+});
+
+test('sessionReading: a climb day reads as a climb day', () => {
+  const a = { name: 'Summit', total_elevation_gain: 900, distance: 15000, average_heartrate: 150 };
+  const txt = A.sessionReading(a, { zones: [1800, 1200, 600, 0, 0], climbs: [{ gain: 400, seconds: 2000 }, { gain: 300, seconds: 1500 }], dec: null, flat: false, hrMax: 196 });
+  assert.match(txt, /climb day/);
+  assert.match(txt, /900 m/);
+  const flatRun = { name: 'Easy', total_elevation_gain: 80, distance: 10000, average_heartrate: 130 };
+  assert.match(A.sessionReading(flatRun, { zones: null, climbs: [], dec: 3.2, flat: true, hrMax: 196 }), /durable/);
+  assert.match(A.sessionReading(flatRun, { zones: null, climbs: [], dec: 8, flat: true, hrMax: 196 }), /still costs you/);
+});
+
+test('sparkPoints: normalized 0-1 elevation samples', () => {
+  const pts = A.sparkPoints({ altitude: Array.from({ length: 24 }, (_, i) => i * 10) }, 24);
+  assert.equal(pts.length, 24);
+  assert.equal(pts[0], 0);
+  assert.equal(pts[23], 1);
+  assert.equal(A.sparkPoints({ altitude: [5] }), null);
+});
+
+test('demo streams stay honest: stream ascent matches activity D+', () => {
+  const acts = demoActivities().filter((a) => a.sport === 'run').slice(0, 8);
+  for (const a of acts) {
+    const s = demoStreams(a);
+    const segs = A.climbSegments(s);
+    // generated stream ascent must match the declared elevation gain closely
+    const alt = s.altitude;
+    let ascent = 0;
+    for (let i = 1; i < alt.length; i++) if (alt[i] > alt[i - 1]) ascent += alt[i] - alt[i - 1];
+    assert.ok(Math.abs(ascent - a.total_elevation_gain) <= 3, `${a.name}: stream ascent ${ascent} vs D+ ${a.total_elevation_gain}`);
+    if (a.total_elevation_gain >= 400) assert.ok(segs.length >= 1, `${a.name}: expected sustained climbs`);
+    if (a.total_elevation_gain <= 120) assert.equal(segs.length, 0, `${a.name}: easy flat run should have no climbs`);
+  }
+});

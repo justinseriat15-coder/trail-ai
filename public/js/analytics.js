@@ -280,7 +280,33 @@ export const METRIC_INFO = {
     what: 'Time spent in each of 5 zones, set as a percentage of your max heart rate.',
     meaning: 'Easy days should sit mostly in Z1-Z2. An "easy" run with a lot of Z3 or above was not actually easy.',
   },
+  week: {
+    name: 'Last 7 days',
+    what: 'Total time on feet and elevation gained in the last 7 days, all run types.',
+    meaning: 'The raw amount of work. Compare it with "load vs usual" to see whether this is more or less than your body is used to.',
+  },
+  load: {
+    name: 'Load vs usual',
+    what: 'Training load (heart-rate based) of the last 7 days compared with your average 7-day load over the 4 weeks before them.',
+    meaning: 'Roughly -10% to +15% is the range to build in. Big spikes are what gets runners hurt.',
+  },
+  easy: {
+    name: 'Easy share',
+    what: 'Percentage of running time spent in heart-rate zones 1-2, from sessions with heart-rate data.',
+    meaning: 'Around 80% easy keeps hard days hard and easy days easy. Much below that usually means easy days are too fast.',
+  },
+  climb: {
+    name: 'Climbing speed',
+    what: 'Vertical metres gained per hour on sustained climbs (50 m or more of gain at 5% or steeper).',
+    meaning: 'The trail-specific fitness number: if it climbs over weeks, your uphill engine is getting stronger.',
+  },
+  engine: {
+    name: 'Aerobic engine',
+    what: 'Your pace at your easy heart rate, from flat, easy runs of 20 minutes or more.',
+    meaning: 'If this pace gets faster over weeks at the same heart rate, your aerobic base is improving. Hilly and hard runs are excluded.',
+  },
 };
+
 
 // One-line "what this means for you" reading of the current ACWR ratio.
 export function acwrReading(r) {
@@ -298,4 +324,206 @@ export function decouplingReading(d) {
   if (d < 5) return 'Good aerobic durability for this duration.';
   if (d < 7) return 'Noticeable cardiac drift: the aerobic base is still developing, so keep long runs easy.';
   return 'Strong cardiac drift: slow down or shorten steady efforts until this comes back under 5%.';
+}
+
+// ======================================================================
+// Phase 2: simple, trail-first metrics. Same maths as before where the
+// brief says so (load ratio = ACWR windows), plain language on top.
+// ======================================================================
+
+// Load vs usual: rolling 7-day TRIMP against the average of the four
+// 7-day windows before it (rolling, so mid-week reads stay honest).
+export function loadVsUsual(activities, hrMax, hrRest, now = new Date()) {
+  const today = startOfDay(now).getTime();
+  const load = new Array(35).fill(0);
+  for (const a of activities) {
+    const t = trimp(a, hrMax, hrRest);
+    if (t == null) continue;
+    const idx = Math.floor((today - startOfDay(a.start_date_local).getTime()) / DAY);
+    if (idx >= 0 && idx < 35) load[idx] += t;
+  }
+  const current = load.slice(0, 7).reduce((s, x) => s + x, 0);
+  let prev = 0;
+  for (let w = 0; w < 4; w++) prev += load.slice(7 + w * 7, 14 + w * 7).reduce((s, x) => s + x, 0);
+  const usual = prev / 4;
+  if (usual <= 0) return { current: Math.round(current), usual: 0, deltaPct: null };
+  return { current: Math.round(current), usual: Math.round(usual), deltaPct: Math.round(((current - usual) / usual) * 100) };
+}
+
+export function loadReading(deltaPct) {
+  if (deltaPct == null) return { label: 'Not enough history yet', level: 'neutral', sentence: 'A few weeks of training and this reads itself.' };
+  const vs = `${deltaPct > 0 ? '+' : ''}${deltaPct}% vs your usual`;
+  if (deltaPct <= -40) return { label: `${vs}: a real dip`, level: 'neutral', sentence: 'Fine if this was a planned easy week; a missed one is a nudge to get back out.' };
+  if (deltaPct <= -15) return { label: `${vs}: lighter`, level: 'good', sentence: 'Lighter than usual. Good for absorbing the recent work.' };
+  if (deltaPct < 15) return { label: `${vs}: fine`, level: 'good', sentence: 'Right where your body expects it.' };
+  if (deltaPct < 30) return { label: `${vs}: building`, level: 'warning', sentence: 'Building. Keep the hard days hard and the easy days easy.' };
+  return { label: `${vs}: ease off`, level: 'serious', sentence: 'A big jump for one week. Cut something before it cuts you.' };
+}
+
+// Easy share: % of running time in Z1-Z2, aggregated over windows.
+// Each activity carries zoneSecs ([s1..s5]) computed from its streams.
+export function easyShare(annotated, now = new Date()) {
+  const today = startOfDay(now).getTime();
+  const agg = (days) => {
+    let easy = 0, tot = 0, covered = 0, sessions = 0;
+    for (const a of annotated) {
+      const idx = Math.floor((today - startOfDay(a.start_date_local).getTime()) / DAY);
+      if (idx < 0 || idx >= days) continue;
+      sessions++;
+      if (!a.zoneSecs) continue;
+      covered++;
+      easy += a.zoneSecs[0] + a.zoneSecs[1];
+      tot += a.zoneSecs.reduce((s, x) => s + x, 0);
+    }
+    return { pct: tot ? Math.round((easy / tot) * 100) : null, covered, sessions };
+  };
+  return { d7: agg(7), d28: agg(28) };
+}
+
+export function easyShareReading(pct, target = 80) {
+  if (pct == null) return { label: 'no HR data', level: 'neutral' };
+  if (pct >= target) return { label: `${pct}% easy: on target`, level: 'good' };
+  if (pct >= target - 12) return { label: `${pct}% easy: close`, level: 'warning' };
+  return { label: `${pct}% easy: too much grey zone`, level: 'serious' };
+}
+
+// Sustained climbs from altitude + distance streams: gain >= 50 m at an
+// average grade >= 5%, with 60 s altitude smoothing (barometer/GPS noise).
+export function climbSegments(streams, { minGain = 50, minGrade = 0.05, minDescent = 10 } = {}) {
+  const { time, distance: dist, altitude: alt } = streams || {};
+  if (!time || !dist || !alt || time.length < 20) return [];
+  const W = 12;
+  const sm = alt.map((_, i) => {
+    const s = alt.slice(Math.max(0, i - W), i + 1);
+    return s.reduce((a, b) => a + b, 0) / s.length;
+  });
+  const segs = [];
+  let segStart = 0, peakIdx = 0;
+  const close = () => {
+    // The climb starts at its base (last lowest point before the peak), not at
+    // the previous segment boundary - flat run-in must not dilute the numbers.
+    let base = Infinity, baseIdx = segStart;
+    for (let i = segStart; i <= peakIdx; i++) if (sm[i] <= base) { base = sm[i]; baseIdx = i; }
+    const gain = sm[peakIdx] - base;
+    const distM = dist[peakIdx] - dist[baseIdx];
+    const secs = time[peakIdx] - time[baseIdx];
+    if (gain >= minGain && distM >= 200 && gain / distM >= minGrade && secs >= 120) {
+      segs.push({
+        startKm: +(dist[baseIdx] / 1000).toFixed(2),
+        endKm: +(dist[peakIdx] / 1000).toFixed(2),
+        gain: Math.round(gain),
+        seconds: Math.round(secs),
+        vertMph: Math.round(gain / (secs / 3600)),
+      });
+    }
+  };
+  for (let i = 1; i < sm.length; i++) {
+    if (sm[i] > sm[peakIdx]) { peakIdx = i; continue; } // strictly higher: a plateau must not dilute vertical speed
+    if (sm[peakIdx] - sm[i] >= minDescent) { close(); segStart = i; peakIdx = i; }
+  }
+  close();
+  return segs;
+}
+
+// One vertical speed figure per activity: climb metres per hour on the
+// sustained climbs only (null when the run has none).
+export function climbingSpeed(segments) {
+  const gain = segments.reduce((s, c) => s + c.gain, 0);
+  const secs = segments.reduce((s, c) => s + c.seconds, 0);
+  return secs >= 300 && gain > 0 ? Math.round(gain / (secs / 3600)) : null;
+}
+
+// 12-week trend of climbing speed (gain-weighted per week) + overall change.
+export function climbTrend(perWeek) {
+  const pts = perWeek.filter((w) => w.vertMph != null);
+  let changePct = null;
+  if (pts.length >= 4) {
+    const n = Math.max(1, Math.floor(pts.length / 3));
+    const avg = (arr) => arr.reduce((s, p) => s + p.vertMph, 0) / arr.length;
+    changePct = +(((avg(pts.slice(-n)) - avg(pts.slice(0, n))) / avg(pts.slice(0, n))) * 100).toFixed(1);
+  }
+  return { points: pts, changePct };
+}
+
+// Aerobic engine: the flat-only EF re-expressed as the pace you hold at a
+// reference easy heart rate (mid-Z2). Linearity holds within easy zones.
+export function aerobicEngine(activities, hrMax) {
+  const refHr = Math.round(hrMax * 0.74);
+  const trend = efTrend(activities, hrMax);
+  const toPace = (ef) => Math.round(60000 / (ef * refHr)); // sec per km
+  const points = trend.map((p) => ({ date: p.date, secPerKm: toPace(p.ef), rollingSecPerKm: toPace(p.rolling) }));
+  const latest = points.length ? points[points.length - 1] : null;
+  return {
+    refHr,
+    points,
+    latestSecPerKm: latest?.rollingSecPerKm ?? null,
+    changePct: efChange(trend),
+  };
+}
+
+export function engineReading(changePct) {
+  if (changePct == null) return 'not enough flat easy runs yet';
+  if (changePct >= 3) return 'improving';
+  if (changePct <= -3) return 'slipping';
+  return 'holding steady';
+}
+
+// The "Today" verdict: one decision and one sentence, from the numbers only.
+// Deterministic - demo needs no model call, live regenerates on new data.
+export function todayVerdict({ deltaPct, engineChangePct, easySharePct, hoursAgo }) {
+  const nums = [];
+  if (deltaPct != null) nums.push(`${deltaPct > 0 ? '+' : ''}${deltaPct}% load vs usual`);
+  if (engineChangePct != null) nums.push(`engine ${engineChangePct > 0 ? '+' : ''}${engineChangePct}%`);
+  else if (easySharePct != null) nums.push(`${easySharePct}% easy running`);
+  if (deltaPct == null) {
+    return { decision: 'Easy day', tone: 'neutral', sentence: 'Not enough history to judge the load yet. Keep today easy and let the data build up.', numbers: nums };
+  }
+  if (deltaPct >= 45) {
+    return { decision: 'Rest', tone: 'serious', sentence: `Load is ${deltaPct}% above your usual. That is spike territory: today is for recovery, not for proving anything.`, numbers: nums };
+  }
+  if (deltaPct >= 30) {
+    return { decision: 'Easy day', tone: 'warning', sentence: `Load is ${deltaPct}% above your usual. If you go out, keep it short and genuinely easy.`, numbers: nums };
+  }
+  if (deltaPct <= -40) {
+    return { decision: 'Train', tone: 'good', sentence: `A lighter spell (${deltaPct}% vs your usual). If that was planned, good - if not, today is a good day to get back out.`, numbers: nums };
+  }
+  if (engineChangePct != null && engineChangePct <= -3) {
+    return { decision: 'Easy day', tone: 'neutral', sentence: 'Load is fine but the aerobic engine has dipped. Keep today aerobic and honest.', numbers: nums };
+  }
+  const engineBit = engineChangePct != null && engineChangePct >= 3 ? ' and the engine is still improving' : '';
+  const freshBit = hoursAgo != null && hoursAgo < 20 ? ' Legs had less than a day since the last one - keep it steady.' : '';
+  return { decision: 'Train', tone: 'good', sentence: `Load is where your body expects it${engineBit}. Green light.${freshBit}`, numbers: nums };
+}
+
+// Short coach reading of one session, from its own numbers.
+export function sessionReading(a, { zones, climbs, dec, flat, hrMax }) {
+  const dplus = Math.round(a.total_elevation_gain || 0);
+  const v = climbingSpeed(climbs || []);
+  const easyPct = zones ? Math.round(((zones[0] + zones[1]) / zones.reduce((s, x) => s + x, 0)) * 100) : null;
+  if (!flat && v) {
+    const hrBit = easyPct != null && easyPct >= 70 ? ' Heart rate stayed under control on the climbs.' : easyPct != null && easyPct < 50 ? ' Heart rate ran high for an easy-looking day - the climbs asked for it.' : '';
+    return `A proper climb day: ${dplus} m at ${v} m/h of vertical speed.${hrBit} This is the work that builds trail legs.`;
+  }
+  if (flat && dec != null) {
+    const easyBit = easyPct != null ? ` ${easyPct}% of the time in Z1-Z2.` : '';
+    return dec < 5
+      ? `A steady aerobic session with ${dec}% drift: durable at this duration.${easyBit}`
+      : `Drift of ${dec}% says this duration still costs you.${easyBit} Keep the next one slower.`;
+  }
+  if (a.average_heartrate && a.average_heartrate / hrMax >= 0.85) {
+    return 'A quality day: real intensity, honestly done. The easy days around it are what make it count.';
+  }
+  return 'An ordinary, useful session. Consistency is the whole trick.';
+}
+
+// Elevation sparkline points for lists: n evenly-sampled altitudes, 0-1.
+export function sparkPoints(streams, n = 24) {
+  const alt = streams?.altitude;
+  if (!alt || alt.length < 2) return null;
+  const step = Math.max(1, Math.floor(alt.length / n));
+  const pts = [];
+  for (let i = 0; i < alt.length && pts.length < n; i += step) pts.push(alt[i]);
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const span = max - min || 1;
+  return pts.map((a) => +((a - min) / span).toFixed(3));
 }

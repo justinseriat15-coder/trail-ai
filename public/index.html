@@ -7,7 +7,7 @@
 <meta name="description" content="Trail running training analytics on Strava data: aerobic efficiency, training load (ACWR), cardiac decoupling, and an AI coach grounded in those metrics.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a19'/%3E%3Cpath d='M5 24 L13 10 L18 18 L21 14 L27 24 Z' fill='%23ff5a1f'/%3E%3C/svg%3E">
 </head>
@@ -49,10 +49,10 @@
   <section class="preview" aria-label="What the dashboard looks like">
     <div class="preview-frame">
       <div class="pv-kpis">
-        <div><span>7-day volume</span><b>48.2 km</b><em>4 sessions, 1,041 m gain</em></div>
-        <div><span>ACWR</span><b>1.08</b><em class="ok">Optimal zone</em></div>
-        <div><span>Aerobic efficiency</span><b>1.07</b><em>+8.8% over 16 weeks</em></div>
-        <div><span>Consecutive days</span><b>2</b><em>max in 14 days</em></div>
+        <div><span>Last 7 days</span><b id="pv-vol">46.1 km</b><em id="pv-vol-sub">4 sessions, 1,022 m gain</em></div>
+        <div><span>Load vs usual</span><b id="pv-load">+9%</b><em class="ok" id="pv-load-sub">fine</em></div>
+        <div><span>Aerobic engine</span><b id="pv-engine">6:26/km</b><em id="pv-engine-sub">at 145 bpm · improving</em></div>
+        <div><span>This week</span><b id="pv-week">0.8 h</b><em id="pv-week-sub">32 m of climbing so far</em></div>
       </div>
       <div class="pv-chat">
         <p class="pv-user">Heavy legs yesterday, felt off.</p>
@@ -119,17 +119,22 @@
 
   <div class="grid">
     <section class="col-data">
-      <header class="app-head">
-        <svg class="topo app-topo" viewBox="700 -100 700 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M3 11.5 21 3l-8.5 18-2-7.5z"/><path d="M506,330 L488,348 L472,363 L459,378 L450,393 L446,409 L442,428 L437,448 L428,469 L414,487 L394,502 L370,513 L343,518 L315,520 L287,520 L260,518 L234,515 L208,511 L183,505 L160,497 L138,486 L121,471 L109,454 L101,436 L95,419 L90,403 L83,388 L71,375 L54,362 L33,348 L11,330 L-8,309 L-20,286 L-22,262 L-14,240 L4,220 L29,206 L59,196 L89,189 L117,184 L143,180 L167,176 L190,171 L213,167 L236,164 L260,164 L283,166 L306,171 L327,177 L348,184 L370,189 L393,195 L418,200 L446,206 L473,215 L498,228 L517,245 L527,266 L528,288 L520,310 L506,330Z"/></svg>
-        <h1 id="app-title">Your training, <span>read like a coach.</span></h1>
-        <p class="app-sub" id="app-sub"></p>
+      <header class="today" aria-label="Today's coaching verdict">
+        <div class="today-main">
+          <span class="today-chip good" id="t-chip">Train</span>
+          <p class="today-sentence" id="t-sentence"></p>
+        </div>
+        <div class="today-nums" id="t-nums"></div>
       </header>
+      <p class="app-sub" id="app-sub"></p>
       <div class="skel-wrap" id="loading" aria-hidden="true">
+        <div class="card skel skel-today"></div>
         <div class="kpis">
           <div class="kpi skel"><i style="width:40%"></i><b style="width:65%"></b><i style="width:55%"></i></div>
           <div class="kpi skel"><i style="width:35%"></i><b style="width:50%"></b><i style="width:70%"></i></div>
           <div class="kpi skel"><i style="width:55%"></i><b style="width:45%"></b><i style="width:60%"></i></div>
           <div class="kpi skel"><i style="width:45%"></i><b style="width:40%"></b><i style="width:50%"></i></div>
+          <div class="kpi skel"><i style="width:50%"></i><b style="width:60%"></b><i style="width:45%"></i></div>
         </div>
         <div class="card skel skel-chart"></div>
         <div class="two">
@@ -141,44 +146,54 @@
       <div id="data" hidden>
 
         <div class="kpis">
-          <div class="kpi" data-metric="volume"><div class="kpi-label">7-day volume</div><div class="kpi-value" id="k-vol">—</div><div class="kpi-sub" id="k-vol-sub"></div></div>
-          <div class="kpi" data-metric="acwr"><div class="kpi-label">ACWR</div><div class="kpi-value" id="k-acwr">—</div><div class="kpi-sub status" id="k-acwr-sub"></div></div>
-          <div class="kpi" data-metric="ef"><div class="kpi-label">Aerobic efficiency</div><div class="kpi-value" id="k-ef">—</div><div class="kpi-sub" id="k-ef-sub"></div></div>
-          <div class="kpi" data-metric="consec"><div class="kpi-label">Consecutive days</div><div class="kpi-value" id="k-consec">—</div><div class="kpi-sub" id="k-consec-sub">max in 14 d</div></div>
+          <div class="kpi" data-metric="week"><div class="kpi-label">Last 7 days</div><div class="kpi-value" id="k-week">—</div><div class="kpi-sub" id="k-week-sub"></div></div>
+          <div class="kpi" data-metric="load"><div class="kpi-label">Load vs usual</div><div class="kpi-value" id="k-load">—</div><div class="kpi-sub status" id="k-load-sub"></div></div>
+          <div class="kpi" data-metric="easy"><div class="kpi-label">Easy share</div><div class="kpi-value" id="k-easy">—</div><div class="kpi-sub" id="k-easy-sub"></div></div>
+          <div class="kpi" data-metric="climb"><div class="kpi-label">Climbing speed</div><div class="kpi-value" id="k-climb">—</div><div class="kpi-sub" id="k-climb-sub"></div></div>
+          <div class="kpi" data-metric="engine"><div class="kpi-label">Aerobic engine</div><div class="kpi-value" id="k-engine">—</div><div class="kpi-sub" id="k-engine-sub"></div></div>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Weekly volume</h2><span class="card-note">running km · 12 weeks</span></div>
-          <div class="chart-box"><canvas id="c-volume" aria-label="Weekly volume in kilometres"></canvas></div>
+          <div class="card-head"><h2>Weekly time and elevation</h2><span class="card-note">hours and D+ · 12 weeks</span></div>
+          <div class="chart-box"><canvas id="c-week" aria-label="Weekly hours and elevation gain"></canvas></div>
         </div>
 
         <div class="two">
           <div class="card">
-            <div class="card-head"><h2>Efficiency Factor</h2><span class="card-note">flat easy runs ≥ 20 min</span></div>
-            <div class="chart-box sm"><canvas id="c-ef" aria-label="Efficiency factor over time"></canvas></div>
-            <p class="card-foot">m/min per bpm. Dots: sessions. Line: 4-session rolling average.</p>
+            <div class="card-head"><h2>Climbing speed</h2><span class="card-note">vertical m/h on sustained climbs</span></div>
+            <div class="chart-box sm"><canvas id="c-climb" aria-label="Climbing speed trend"></canvas></div>
           </div>
           <div class="card">
-            <div class="card-head"><h2>Acute / chronic load</h2><span class="card-note">8 weeks</span></div>
-            <div class="chart-box sm"><canvas id="c-acwr" aria-label="Acute to chronic load ratio"></canvas></div>
-            <p class="card-foot">Green band: 0.8 to 1.3. Above 1.5, injury risk is elevated.</p>
+            <div class="card-head"><h2>Aerobic engine</h2><span class="card-note">pace at your easy heart rate</span></div>
+            <div class="chart-box sm"><canvas id="c-engine" aria-label="Aerobic engine trend"></canvas></div>
           </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Easy share</h2><span class="card-note">time in Z1-Z2 · target ~80%</span></div>
+          <div class="easybar" id="easybar"></div>
+          <p class="card-foot" id="easybar-foot"></p>
         </div>
 
         <div class="card" id="detail" hidden>
           <div class="card-head"><h2 id="d-title">Session</h2><button class="btn-ghost sm" id="d-close" aria-label="Close details">Close</button></div>
-          <div class="detail-stats" id="d-stats"></div>
-          <div class="zones" id="d-zones"></div>
-          <div class="chart-box sm"><canvas id="c-hr" aria-label="Heart rate over the session"></canvas></div>
-          <div class="chart-box xs"><canvas id="c-pace" aria-label="Pace over the session"></canvas></div>
-          <button class="btn-secondary sm" id="d-ask">Ask the coach for an analysis</button>
+          <div class="profile-hero" id="d-hero"></div>
+          <div class="detail-grid">
+            <div class="route-wrap" id="d-route-wrap"><svg id="d-route" viewBox="0 0 300 300" role="img" aria-label="Route shape"></svg></div>
+            <div>
+              <div class="detail-stats" id="d-stats"></div>
+              <div class="zones" id="d-zones"></div>
+              <p class="coach-reading" id="d-reading"></p>
+              <button class="btn-secondary sm" id="d-ask">Ask the coach for an analysis</button>
+            </div>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-head"><h2>Recent sessions</h2><span class="card-note">click for detailed analysis</span></div>
           <div class="table-wrap">
             <table class="runs">
-              <thead><tr><th>Date</th><th>Session</th><th class="r">km</th><th class="r">Pace</th><th class="r">HR</th><th class="r">Elev.</th><th class="r">EF</th></tr></thead>
+              <thead><tr><th>Date</th><th>Session</th><th>Profile</th><th class="r">km</th><th class="r">Pace</th><th class="r">HR</th><th class="r">D+</th></tr></thead>
               <tbody id="runs"></tbody>
             </table>
           </div>
@@ -207,6 +222,29 @@
   </div>
 </main>
 
+<script type="module">
+// Keep the landing preview in sync with the demo dataset it describes.
+import { demoActivities, DEMO_PROFILE } from '/js/demo-data.js';
+import { loadVsUsual, loadReading, aerobicEngine, engineReading, weeklyVolume, isRun, parseLocal, km } from '/js/analytics.js';
+const acts = demoActivities();
+const { hrMax, hrRest } = DEMO_PROFILE;
+const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+const last7 = acts.filter((a) => isRun(a) && Date.now() - parseLocal(a.start_date_local) < 7 * 86400000);
+set('pv-vol', `${km(last7.reduce((t, a) => t + a.distance, 0))} km`);
+set('pv-vol-sub', `${last7.length} sessions, ${Math.round(last7.reduce((t, a) => t + (a.total_elevation_gain || 0), 0)).toLocaleString('en-GB')} m gain`);
+const lv = loadVsUsual(acts, hrMax, hrRest);
+set('pv-load', lv.deltaPct == null ? '—' : `${lv.deltaPct > 0 ? '+' : ''}${lv.deltaPct}%`);
+set('pv-load-sub', loadReading(lv.deltaPct).label.replace(/^.*?vs your usual: /, ''));
+const eng = aerobicEngine(acts, hrMax);
+if (eng.latestSecPerKm) {
+  const m = Math.floor(eng.latestSecPerKm / 60), sec = String(eng.latestSecPerKm % 60).padStart(2, '0');
+  set('pv-engine', `${m}:${sec}/km`);
+  set('pv-engine-sub', `at ${eng.refHr} bpm · ${engineReading(eng.changePct)}`);
+}
+const wk = weeklyVolume(acts, 1)[0];
+set('pv-week', `${wk.hours} h`);
+set('pv-week-sub', `${wk.dplus.toLocaleString('en-GB')} m of climbing so far`);
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>
