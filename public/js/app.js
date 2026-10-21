@@ -582,7 +582,9 @@ function subChart(pts, get, cls, unit, W, X, reverse = false) {
   const H = 74, padT = 8, padB = 14;
   const vals = pts.map(get).filter((x) => x != null);
   if (!vals.length) return document.createDocumentFragment();
-  const rawLo = Math.min(...vals), rawHi = Math.max(...vals);
+  const sorted = [...vals].sort((a, b) => a - b);
+  // Robust extremes: the slowest single seconds are usually stop ramp-up, not hiking.
+  const rawLo = sorted[0], rawHi = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.98))];
   const pad = (rawHi - rawLo || 1) * 0.15;
   const lo = rawLo - pad, hi = rawHi + pad;
   const Y = (v) => reverse
