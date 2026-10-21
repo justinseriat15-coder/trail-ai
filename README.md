@@ -18,7 +18,7 @@ A Today verdict (train, easy day or rest) in one sentence, five plain metrics be
 | **Aerobic engine** | Pace at your easy heart rate, from flat easy runs of 20 minutes or more | If this gets faster at the same heart rate, the aerobic base is improving. |
 | **Cardiac drift** (per session) | Heart rate rise in the second half of a steady flat run vs the first, after warm-up | Under 5% means durable endurance at that duration. |
 
-**Race readiness** checks two rules of thumb over the last 12 weeks against a target race: longest run vs 2/3 of the race distance, and biggest week of climbing vs the race D+. There is no average: the score is the weaker of the two, and the card leads with the limiting factor. Climbing speed is shown as context only, because training speed on short fresh climbs is not comparable to race-average climbing speed. The demo uses a fictional 50 km / 2,500 m race; live mode reads the owner's race from the `RACE_TARGET` setting.
+**Race readiness** checks two rules of thumb over the last 12 weeks against a target race: longest run (vs 2/3 of the race distance up to 60 km; for ultras the rule switches to time on feet, about 5.5 h) and biggest week of climbing vs the race D+. There is no average: the score is the weaker of the two, and the card leads with the limiting factor. Climbing speed is shown as context only, because training speed on short fresh climbs is not comparable to race-average climbing speed. The demo uses a fictional 50 km / 2,500 m race; live mode reads the owner's race from the `RACE_TARGET` setting.
 
 Internally the model uses heart-rate load (a Banister-style impulse), acute vs chronic load and efficiency factor; the interface and the coach only use the plain terms above.
 

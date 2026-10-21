@@ -309,6 +309,25 @@ test('race readiness: empty history gives no score', () => {
   assert.match(r.sentence, /Not enough/);
 });
 
+test('race readiness: ultras switch to a time-on-feet rule (5.5 h), not 2/3 of distance', () => {
+  const ultra = { name: 'Ultra Marin', distanceKm: 175, dplusM: 1430, hours: 16 };
+  assert.equal(A.isUltra(ultra), true);
+  assert.equal(A.isUltra({ distanceKm: 60 }), false);
+  const long5 = raceWeeks(12, { moving_time: 5.5 * 3600, distance: 40000, total_elevation_gain: 1500 });
+  const r = A.raceReadiness(long5, { race: ultra, now: NOW });
+  assert.equal(r.parts.distance.unit, 'h');
+  assert.equal(r.parts.distance.need, 5.5);
+  assert.equal(r.parts.distance.pct, 100);
+  const short = raceWeeks(12, { moving_time: 2.75 * 3600, distance: 20000, total_elevation_gain: 1500 });
+  const r2 = A.raceReadiness(short, { race: ultra, now: NOW });
+  assert.equal(r2.parts.distance.pct, 50);
+  assert.equal(r2.limiting.key, 'distance');
+  assert.match(r2.sentence, /time on feet/);
+  assert.match(r2.sentence, /back-to-back/);
+  // a 50K keeps the km rule
+  assert.equal(A.raceReadiness(short, { now: NOW }).parts.distance.unit, 'km');
+});
+
 test('race readiness: long-run target is 2/3 of the race distance, not the full distance', () => {
   assert.equal(A.longRunTargetKm({ distanceKm: 50 }), 33);
   assert.equal(A.longRunTargetKm({ distanceKm: 100 }), 67);

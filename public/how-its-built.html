@@ -72,7 +72,7 @@
     </ul>
     <p>Behind the plain names are standard sports-science tools: a Banister heart-rate load, acute-to-chronic load ratio and efficiency factor. They stay inside the engine; the interface and the coach never use the jargon.</p>
     <h3>Race readiness, scored by the weakest link</h3>
-    <p>Two rules of thumb over the last 12 weeks against a target race: longest run against two thirds of the race distance, and biggest climbing week against the race D+. There is no average, because an average hides the problem: the score is the weaker of the two and the card leads with the limiting factor. Climbing speed is shown for context only, since training speed on short fresh climbs is not comparable to race-average speed. The demo uses a fictional race; the owner's real race lives in a server-side setting, never in the browser, so the coach only ever sees server-side data.</p>
+    <p>Two rules of thumb over the last 12 weeks against a target race: longest run (against two thirds of the race distance up to 60 km, and against about 5.5 hours of time on feet for ultras, where the distance rule stops scaling) and biggest climbing week against the race D+. There is no average, because an average hides the problem: the score is the weaker of the two and the card leads with the limiting factor. Climbing speed is shown for context only, since training speed on short fresh climbs is not comparable to race-average speed. The demo uses a fictional race; the owner's real race lives in a server-side setting, never in the browser, so the coach only ever sees server-side data.</p>
   </section>
 
   <section>
@@ -105,7 +105,7 @@
 
   <section>
     <h2>How it's tested</h2>
-    <p>61 unit and integration tests (<code>node:test</code>, no framework) cover the metrics functions, race readiness, the session crypto, and the whole agent loop against a mock model - tool selection, visible-step labels, streaming, budgets and the forced final answer. On top of that, an 11-question evaluation harness (<code>npm run eval</code>) runs real questions through the real model against demo data, checking that the coach reaches for the right tool for each kind of question.</p>
+    <p>62 unit and integration tests (<code>node:test</code>, no framework) cover the metrics functions, race readiness, the session crypto, and the whole agent loop against a mock model - tool selection, visible-step labels, streaming, budgets and the forced final answer. On top of that, an 11-question evaluation harness (<code>npm run eval</code>) runs real questions through the real model against demo data, checking that the coach reaches for the right tool for each kind of question.</p>
     <p>Every change ships the same way: a branch, tests green, the Vercel preview checked on desktop and mobile, and only then a merge - the live site is on my CV, so it doesn't break.</p>
   </section>
 

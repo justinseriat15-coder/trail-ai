@@ -207,7 +207,7 @@ function renderRace(acts, climbNow) {
   rfill.classList.toggle('full', rr.score === 100);
   $('race-pct').textContent = rr.score == null ? '—' : `${rr.score}%`;
   const partRows = [
-    ['Long run, 12 weeks', rr.parts.distance, (p) => `${p.have} km of ${p.need} km`],
+    [rr.parts.distance.unit === 'h' ? 'Longest run, 12 weeks' : 'Long run, 12 weeks', rr.parts.distance, (p) => `${p.have} ${p.unit} of ${p.need} ${p.unit}`],
     ['Biggest D+ week', rr.parts.vertWeek, (p) => `${fmtN(p.have)} m of ${fmtN(p.need)} m`],
   ];
   $('race-parts').replaceChildren(...partRows.map(([lbl, p, fmt]) => {

@@ -283,7 +283,7 @@ export const METRIC_INFO = {
   },
   race: {
     name: 'Race readiness',
-    what: 'Two rules of thumb over the last 12 weeks against your target race: your longest run vs 2/3 of the race distance, and your biggest week of climbing vs the race total D+.',
+    what: 'Two rules of thumb over the last 12 weeks against your target race: your longest run, and your biggest week of climbing vs the race total D+. Up to 60 km the longest run is compared with 2/3 of the race distance; for ultras that rule stops scaling, so it becomes time on feet: longest run vs about 5.5 hours (back-to-back long days matter too, but are not measured).',
     meaning: 'No average: the score is the weaker of the two, because a race is only as doable as its limiting factor. Both targets are rules of thumb, not predictions. Climbing speed is shown for context and is not scored: training speed on short fresh climbs is not comparable to race-average climbing speed.',
   },
   engine: {
@@ -563,13 +563,19 @@ export function sparkPoints(streams, n = 24) {
 // ---------- Race readiness ----------
 // Two rules of thumb, scored by the weakest link (a race is only as doable as
 // its limiting factor, so there is no average):
-//  1. Longest run in 12 weeks vs 2/3 of the race distance (a 50K build peaks
-//     around 33 km, nobody runs the full distance in training).
+//  1. Longest run in 12 weeks. Up to ULTRA_FROM_KM it is measured in km vs 2/3
+//     of the race distance (a 50K build peaks around 33 km). Above that the
+//     2/3 rule stops scaling (117 km for a 175K), so the check switches to time
+//     on feet: longest run vs about 5.5 h. Back-to-back long days matter for
+//     ultras too, but they are not measured here.
 //  2. Biggest week of climbing in 12 weeks vs the race's total D+.
 // Each check is capped at 100%; the score is the lower of the two.
 // Climbing speed is shown as context only: training speed on short fresh
 // climbs is not comparable to race-average climbing speed, so it is not scored.
 export const LONG_RUN_SHARE = 2 / 3;
+export const ULTRA_FROM_KM = 60;
+export const TIME_ON_FEET_H = 5.5;
+export const isUltra = (race) => race.distanceKm > ULTRA_FROM_KM;
 // Fictional race, used for the demo only. hours = target moving time (display only).
 export const DEMO_RACE = { name: 'fictional 50K', distanceKm: 50, dplusM: 2500, hours: 7 };
 
@@ -598,12 +604,16 @@ export function raceReadiness(activities, { race = DEMO_RACE, climbNow = null, n
   const biggestDplus = weeklyVolume(activities, 12, now).reduce((m, w) => Math.max(m, w.dplus), 0);
   const cap = (x) => Math.max(0, Math.min(100, Math.round(x * 100)));
   const needKm = longRunTargetKm(race);
+  const longestH = runs.length ? Math.max(...runs.map((a) => a.moving_time / 3600)) : 0;
+  const ultra = isUltra(race);
   const parts = {
-    distance: { label: 'Long run', have: +longestKm.toFixed(1), need: needKm, pct: cap(longestKm / needKm) },
+    distance: ultra
+      ? { label: 'Longest run (time on feet)', unit: 'h', have: +longestH.toFixed(1), need: TIME_ON_FEET_H, pct: cap(longestH / TIME_ON_FEET_H) }
+      : { label: 'Long run', unit: 'km', have: +longestKm.toFixed(1), need: needKm, pct: cap(longestKm / needKm) },
     vertWeek: { label: 'Biggest D+ week', have: biggestDplus, need: race.dplusM, pct: race.dplusM > 0 ? cap(biggestDplus / race.dplusM) : 100 },
   };
   const context = { climbSpeed: climbNow };
-  if (parts.distance.have === 0 && parts.vertWeek.have === 0) {
+  if (longestKm === 0 && parts.vertWeek.have === 0) {
     return { race, parts, context, limiting: null, score: null, sentence: 'Not enough training data yet to judge race readiness.' };
   }
   const entries = Object.entries(parts);
@@ -614,7 +624,9 @@ export function raceReadiness(activities, { race = DEMO_RACE, climbNow = null, n
   if (limiting.pct >= 100) {
     sentence = 'No weak link: the longest run and the biggest climbing week both reach the rules of thumb for this race.';
   } else if (key === 'distance') {
-    sentence = `Limiting factor: the long run. ${parts.distance.have} km longest in 12 weeks against a ${needKm} km target (2/3 of ${race.distanceKm} km). Build it first.`;
+    sentence = ultra
+      ? `Limiting factor: time on feet. ${parts.distance.have} h longest run in 12 weeks against about ${TIME_ON_FEET_H} h for an ultra. Build it first, and add back-to-back long days.`
+      : `Limiting factor: the long run. ${parts.distance.have} km longest in 12 weeks against a ${needKm} km target (2/3 of ${race.distanceKm} km). Build it first.`;
   } else {
     sentence = `Limiting factor: climbing volume. ${fmt(parts.vertWeek.have)} m D+ in the biggest week against the ${fmt(race.dplusM)} m the race packs into one day.`;
   }
