@@ -215,21 +215,23 @@ export function streamSeries(streams, n = 200) {
 }
 
 // ---------- Compact summary (fed to the LLM, also shown in the UI) ----------
-export function buildSummary(activities, { hrMax, hrRest, now = new Date() }) {
+export function buildSummary(activities, { hrMax, hrRest, now = new Date(), perActivity = {} } = {}) {
   const runs = activities.filter(isRun).sort((a, b) => parseLocal(b.start_date_local) - parseLocal(a.start_date_local));
-  const acwr = acwrSeries(activities, hrMax, hrRest, 28, now);
-  const latest = acwr[acwr.length - 1];
-  const trend = efTrend(activities, hrMax);
+  const lv = loadVsUsual(activities, hrMax, hrRest, now);
+  const es = easyShare(activities.map((a) => ({ ...a, zoneSecs: perActivity[a.id]?.zoneSecs || null })), now);
+  const eng = aerobicEngine(activities, hrMax);
+  const climb = climbTrend(weeklyClimbSpeed(activities, perActivity, 12, now));
+  const climbNow = [...climb.points].reverse().find((w) => w.rolling != null)?.rolling ?? null;
   const weeks = weeklyVolume(activities, 8, now);
   return {
     hrMax, hrRest,
     zones: zoneBounds(hrMax),
-    acwr: latest,
-    acwrStatus: acwrStatus(latest?.ratio),
-    efChangePct: efChange(trend),
-    efLast: trend.slice(-6),
+    load: lv,
+    loadReading: loadReading(lv.deltaPct),
+    easyShare: es,
+    engine: eng,
+    climb, climbNow,
     weeks,
-    consecutiveRunDays14d: consecutiveRunDays(activities, now),
     recentRuns: runs.slice(0, 15).map((a) => ({
       id: a.id,
       date: a.start_date_local.slice(0, 10),
@@ -241,8 +243,6 @@ export function buildSummary(activities, { hrMax, hrRest, now = new Date() }) {
       hr: a.average_heartrate ? Math.round(a.average_heartrate) : null,
       hrMax: a.max_heartrate ? Math.round(a.max_heartrate) : null,
       dplus: Math.round(a.total_elevation_gain || 0),
-      ef: efficiencyFactor(a) ? +efficiencyFactor(a).toFixed(3) : null,
-      trimp: trimp(a, hrMax, hrRest) ? Math.round(trimp(a, hrMax, hrRest)) : null,
     })),
   };
 }
@@ -250,26 +250,6 @@ export function buildSummary(activities, { hrMax, hrRest, now = new Date() }) {
 // ---------- Metric explanations (dashboard tooltips and readings) ----------
 // Pure data + pure functions so they are unit-testable and shared with the server.
 export const METRIC_INFO = {
-  volume: {
-    name: '7-day volume',
-    what: 'Total distance run over the last 7 days, all run types.',
-    meaning: 'Watch for sudden jumps versus your usual week: they are what pushes the ACWR load ratio up.',
-  },
-  acwr: {
-    name: 'ACWR (acute:chronic workload ratio)',
-    what: 'Your 7-day training load divided by your average weekly load over the last 28 days (Banister TRIMP).',
-    meaning: '0.8 to 1.3 is the sweet spot. Above 1.5, load is rising much faster than your base and injury risk climbs.',
-  },
-  ef: {
-    name: 'Efficiency Factor (EF)',
-    what: 'Speed per heartbeat (metres per minute per bpm) on flat, easy runs of 20 minutes or more.',
-    meaning: 'If the rolling line climbs over weeks, your aerobic base is improving. Hilly runs and intervals are excluded so the comparison stays fair.',
-  },
-  consec: {
-    name: 'Consecutive days',
-    what: 'The longest streak of back-to-back running days in the last 14 days.',
-    meaning: 'Three or more days in a row raises fatigue density. Most plans alternate hard and easy days.',
-  },
   decoupling: {
     name: 'Cardiac decoupling (Pa:HR)',
     what: 'How much your heart rate drifts upward at a steady effort, comparing the second half of the session with the first (after a 10-minute warm-up).',
@@ -297,7 +277,7 @@ export const METRIC_INFO = {
   },
   climb: {
     name: 'Climbing speed',
-    what: 'Vertical metres gained per hour on sustained climbs (50 m or more of gain at 5% or steeper).',
+    what: 'Vertical metres gained per hour on sustained climbs (50 m or more of gain at 3% or steeper).',
     meaning: 'The trail-specific fitness number: if it climbs over weeks, your uphill engine is getting stronger.',
   },
   engine: {
@@ -389,7 +369,7 @@ export function easyShareReading(pct, target = 80) {
 
 // Sustained climbs from altitude + distance streams: gain >= 50 m at an
 // average grade >= 5%, with 60 s altitude smoothing (barometer/GPS noise).
-export function climbSegments(streams, { minGain = 50, minGrade = 0.05, minDescent = 10 } = {}) {
+export function climbSegments(streams, { minGain = 50, minGrade = 0.03, minDescent = 10 } = {}) {
   const { time, distance: dist, altitude: alt } = streams || {};
   if (!time || !dist || !alt || time.length < 20) return [];
   const W = 12;
@@ -434,6 +414,23 @@ export function climbingSpeed(segments) {
 }
 
 // 12-week trend of climbing speed (gain-weighted per week) + overall change.
+// Weekly climbing speed (vertical m/h) per week, from detected climbs.
+// perActivity maps activity id -> { climbs } (from lib/insights.js).
+export function weeklyClimbSpeed(activities, perActivity = {}, weeks = 12, now = new Date()) {
+  return weeklyVolume(activities, weeks, now).map((w) => {
+    let gain = 0, secs = 0;
+    const ws = new Date(w.week + 'T00:00'), we = new Date(ws); we.setDate(we.getDate() + 7);
+    for (const a of activities) {
+      const info = perActivity[a.id];
+      if (!info?.climbs?.length) continue;
+      const d = parseLocal(a.start_date_local);
+      if (d < ws || d >= we) continue;
+      for (const c of info.climbs) { gain += c.gain; secs += c.seconds; }
+    }
+    return { week: w.week, vertMph: secs >= 300 && gain > 0 ? Math.round(gain / (secs / 3600)) : null };
+  });
+}
+
 // Climbing-speed trend from weekly vertMph values: a rolling 3-week median
 // line (robust to one-off weeks), and change = mean of first 4 vs last 4
 // weeks with data.

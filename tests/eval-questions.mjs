@@ -9,7 +9,7 @@ export const EVAL_QUESTIONS = [
   { q: 'Analyse my long run from 18 October second by second.', expect: 'fetch' },
   { q: 'Compare my volume this month with 12 weeks ago.', expect: 'fetch' },
   { q: 'What did my training look like in the first half of July?', expect: 'fetch' },
-  { q: 'Show my ACWR trend over the last 40 days.', expect: 'fetch' },
+  { q: 'How has my climbing speed changed over the last 12 weeks?', expect: 'fetch' },
   { q: 'How much time did I spend in each heart-rate zone during my last threshold session?', expect: 'fetch' },
   { q: 'What should I do tomorrow?', expect: 'direct' },
   { q: 'How many sessions did I do in September, and what was the total distance?', expect: 'fetch' },
