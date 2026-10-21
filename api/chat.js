@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { handler, json, readJson, clientIp } from '../lib/http.js';
 import { loadAthlete, loadStreams } from '../lib/data.js';
 import { buildSystemPrompt } from '../lib/coach.js';
+import { computeInsights } from '../lib/insights.js';
 import { runCoachAgent } from '../lib/agent.js';
 import { rateLimit } from '../lib/ratelimit.js';
 
@@ -46,7 +47,9 @@ export default handler(['POST'], async (req, res) => {
 
   let streams = null;
   if (body.activityId) streams = await loadStreams(ctx, body.activityId).catch(() => null);
-  const system = buildSystemPrompt(ctx, { activityId: body.activityId, streams });
+  // Insights (zone time, climbs) feed the coach's summary; cached, shared with the dashboard.
+  ctx.insights = await computeInsights(ctx).catch(() => null);
+  const system = buildSystemPrompt(ctx, { activityId: body.activityId, streams, perActivity: ctx.insights?.perActivity });
 
   const model = ctx.mode === 'demo'
     ? process.env.ANTHROPIC_DEMO_MODEL || 'claude-haiku-4-5-20251001'

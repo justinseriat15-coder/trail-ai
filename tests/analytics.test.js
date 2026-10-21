@@ -90,7 +90,7 @@ test('decoupling readings match the thresholds', () => {
 });
 
 test('every dashboard metric has a plain-language explanation', () => {
-  for (const k of ['volume', 'acwr', 'ef', 'consec', 'decoupling', 'zones']) {
+  for (const k of ['week', 'load', 'easy', 'climb', 'engine', 'decoupling', 'zones']) {
     assert.ok(A.METRIC_INFO[k]?.what?.length > 20, `${k} what`);
     assert.ok(A.METRIC_INFO[k]?.meaning?.length > 20, `${k} meaning`);
   }

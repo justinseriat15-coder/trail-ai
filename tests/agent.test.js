@@ -37,7 +37,7 @@ test('list_activities filters by type and returns a trimmed shape', async () => 
   assert.ok(out.count >= 1);
   for (const a of out.activities) {
     assert.equal(a.type, 'TrailRun');
-    assert.deepEqual(Object.keys(a).sort(), ['date', 'ef', 'gain', 'hr', 'id', 'km', 'min', 'name', 'pace', 'trimp', 'type']);
+    assert.deepEqual(Object.keys(a).sort(), ['date', 'gain', 'hr', 'id', 'km', 'min', 'name', 'pace', 'type']);
     for (const v of Object.values(a)) assert.ok(typeof v !== 'object', 'no nested raw Strava blobs');
   }
 });
@@ -68,11 +68,20 @@ test('get_activity_details rejects an unknown demo id', async () => {
 
 // --- compute_stats ---
 
-test('compute_stats acwr equals the shared analytics series', async () => {
+test('compute_stats engine_trend matches the shared analytics function', async () => {
   const ctx = demoCtx();
-  const out = await executeTool(ctx, 'compute_stats', { metric: 'acwr', days: 28 }, budget());
-  const expected = A.acwrSeries(ctx.activities, 196, 48, 28);
-  assert.deepEqual(out.series, expected);
+  const out = await executeTool(ctx, 'compute_stats', { metric: 'engine_trend', days: 28 }, budget());
+  const expected = A.aerobicEngine(ctx.activities, 196);
+  assert.deepEqual(out.points, expected.points);
+  assert.equal(out.changePct, expected.changePct);
+});
+
+test('compute_stats summary speaks the new model', async () => {
+  const ctx = demoCtx();
+  const out = await executeTool(ctx, 'compute_stats', { metric: 'summary' }, budget());
+  assert.ok(out.load && typeof out.load.deltaPct === 'number');
+  assert.ok(out.engine && 'latestSecPerKm' in out.engine);
+  assert.ok(!('acwr' in out) && !('efChangePct' in out) && !JSON.stringify(out).includes('trimp'));
 });
 
 test('compute_stats weekly_volume window and unknown metric', async () => {
@@ -105,8 +114,8 @@ const text = (t) => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 
 
 test('one round trip: tool result goes back and the answer comes out', async () => {
   const client = mockClient([
-    () => toolUse('compute_stats', { metric: 'acwr', days: 28 }),
-    () => text('Your ACWR is 1.08, in the optimal zone.'),
+    () => toolUse('compute_stats', { metric: 'summary', days: 28 }),
+    () => text('Your load is 33% above your usual - cut the week back.'),
   ]);
   const labels = [];
   const out = await runCoachAgent({
@@ -114,16 +123,16 @@ test('one round trip: tool result goes back and the answer comes out', async () 
     messages: [{ role: 'user', content: 'How is my load trending?' }],
     onStep: (l) => labels.push(l),
   });
-  assert.equal(out.reply, 'Your ACWR is 1.08, in the optimal zone.');
+  assert.equal(out.reply, 'Your load is 33% above your usual - cut the week back.');
   assert.equal(out.calls, 2);
-  assert.deepEqual(labels, ['Computing ACWR series over 28 days…']);
+  assert.deepEqual(labels, ['Computing training summary over 28 days…']);
   // assistant turn went back verbatim, then one user message with the tool result
   const convo = client.calls[1].messages;
   assert.equal(convo.at(-2).role, 'assistant');
   assert.equal(convo.at(-1).role, 'user');
   assert.equal(convo.at(-1).content[0].type, 'tool_result');
   const payload = JSON.parse(convo.at(-1).content[0].content);
-  assert.ok(Array.isArray(payload.series));
+  assert.ok(typeof payload.load?.deltaPct === 'number' && Array.isArray(payload.weeks));
   // second cache breakpoint on the latest tool result
   assert.deepEqual(convo.at(-1).content.at(-1).cache_control, { type: 'ephemeral' });
 });
@@ -187,8 +196,8 @@ test('step labels are built from tool name + inputs', () => {
     stepLabel({ name: 'get_activity_details', input: { id: one.id } }, ctx),
     `Analysing "${one.name}" (${String(one.start_date_local).slice(0, 10)}) second by second…`);
   assert.equal(
-    stepLabel({ name: 'compute_stats', input: { metric: 'ef_trend' } }, ctx),
-    'Computing efficiency trend over 56 days…');
+    stepLabel({ name: 'compute_stats', input: { metric: 'climb_trend' } }, ctx),
+    'Computing climbing-speed trend over 56 days…');
 });
 
 // --- prompt guarantees ---
