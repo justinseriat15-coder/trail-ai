@@ -233,3 +233,61 @@ test('demo streams stay honest: stream ascent matches activity D+', () => {
     if (a.total_elevation_gain <= 120) assert.equal(segs.length, 0, `${a.name}: easy flat run should have no climbs`);
   }
 });
+
+// ---------- Rollout fixes from Justin's design review (21 Oct) ----------
+
+test('todayVerdict: an easy day justifies itself with load + easy share', () => {
+  const v = A.todayVerdict({ deltaPct: 33, engineChangePct: 8, easySharePct: 60, hoursAgo: 30 });
+  assert.equal(v.decision, 'Easy day');
+  assert.deepEqual(v.numbers.map((n) => n[1]), ['load vs usual', 'easy share']);
+  const t = A.todayVerdict({ deltaPct: 5, engineChangePct: 6, easySharePct: 82, hoursAgo: 40 });
+  assert.deepEqual(t.numbers.map((n) => n[1]), ['load vs usual', 'aerobic engine']);
+  const noHist = A.todayVerdict({ deltaPct: null, engineChangePct: null, easySharePct: null, hoursAgo: null });
+  assert.equal(noHist.numbers.length, 0);
+});
+
+test('climbTrend: rolling median shrugs off one-off weeks, first 4 vs last 4', () => {
+  const weeks = [600, 610, 590, 605, 900, 615, 700, 720, 710, 730, 725, 735]
+    .map((v, i) => ({ week: `2026-07-${String(6 + i * 7).padStart(2, '0')}`, vertMph: v }));
+  const ct = A.climbTrend(weeks);
+  const spikeIdx = 4;
+  assert.ok(ct.points[spikeIdx].rolling < 700, `median at spike week ${ct.points[spikeIdx].rolling}`);
+  assert.ok(ct.changePct > 10, `changePct ${ct.changePct}`);
+  assert.equal(A.climbTrend(weeks.slice(0, 4)).changePct, null);
+});
+
+test('demo streams: distance matches the declared distance exactly', () => {
+  const acts = demoActivities().filter((a) => a.sport === 'run').slice(0, 10);
+  for (const a of acts) {
+    const s = demoStreams(a);
+    assert.equal(s.distance.at(-1), a.distance, `${a.name}: stream ends at ${s.distance.at(-1)} vs declared ${a.distance}`);
+  }
+});
+
+test('demo streams: an out-and-back has one summit, a loop comes home low', () => {
+  const acts = demoActivities();
+  const ob = acts.find((a) => /out-and-back/i.test(a.name));
+  const s = demoStreams(ob);
+  const peakIdx = s.altitude.indexOf(Math.max(...s.altitude));
+  assert.ok(peakIdx / s.altitude.length > 0.4 && peakIdx / s.altitude.length < 0.7, 'summit near the middle');
+  const segs = A.climbSegments(s);
+  assert.ok(segs.length <= 2, `out-and-back should read as one main climb, got ${segs.length}`);
+  const loop = acts.find((a) => /loop/i.test(a.name) && a.total_elevation_gain > 200);
+  if (loop) {
+    const sl = demoStreams(loop);
+    assert.ok(sl.altitude.at(-1) - sl.altitude[0] < 150, `loop ends ${sl.altitude.at(-1) - sl.altitude[0]} m above start`);
+  }
+});
+
+test('demo streams: HR rises into a climb over ~1-2 min, never instantly', () => {
+  const acts = demoActivities();
+  const ob = acts.find((a) => /out-and-back/i.test(a.name));
+  const s = demoStreams(ob);
+  // find the steepest sustained ramp and check HR does not jump >8 bpm in 30 s on it
+  let worst = 0;
+  for (let i = 6; i < s.heartrate.length; i++) {
+    const gain = s.altitude[i] - s.altitude[i - 6];
+    if (gain > 12) worst = Math.max(worst, s.heartrate[i] - s.heartrate[i - 6]);
+  }
+  assert.ok(worst <= 10, `HR jumped ${worst} bpm in 30 s on a ramp`);
+});

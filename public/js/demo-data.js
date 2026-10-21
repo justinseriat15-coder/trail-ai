@@ -106,17 +106,41 @@ export function demoStreams(activity) {
   const time = [], heartrate = [], velocity_smooth = [], distance = [], altitude = [];
   const dplus = activity.total_elevation_gain || 0;
 
-  // Pass 1: terrain. Real trail runs are a few dominant climbs, not even
-  // rolling: build 1-3 major climbs with irregular slopes, then noise.
+  // Pass 1: terrain. The profile must agree with the session name: an
+  // out-and-back has ONE summit, a loop has 1-3 climbs and comes home low.
+  const outback = /out-and-back/i.test(activity.name || '');
   const raw = new Array(N).fill(20);
-  if (dplus > 0) {
+  if (dplus > 0 && outback) {
+    const summit = Math.floor(N * (0.5 + rand() * 0.12));
+    const knee = Math.floor(summit * (0.3 + rand() * 0.2));
+    const knots = [
+      [0, 0],
+      [knee, dplus * (0.28 + rand() * 0.15)],
+      [Math.floor(summit * 0.8), dplus * (0.7 + rand() * 0.12)],
+      [summit, dplus],
+      [summit + Math.max(2, Math.floor(N * 0.02)), dplus * (0.93 + rand() * 0.04)],
+      [Math.floor(summit + (N - summit) * 0.5), dplus * (0.4 + rand() * 0.1)],
+      [N - 1, dplus * (0.02 + rand() * 0.05)],
+    ];
+    for (let i = 0; i < N; i++) {
+      let s0 = knots[0], s1 = knots[knots.length - 1];
+      for (let kI = 0; kI < knots.length - 1; kI++) {
+        if (i >= knots[kI][0] && i <= knots[kI + 1][0]) { s0 = knots[kI]; s1 = knots[kI + 1]; break; }
+      }
+      const span = Math.max(1, s1[0] - s0[0]);
+      raw[i] = 20 + s0[1] + ((s1[1] - s0[1]) * (i - s0[0])) / span
+        + Math.sin(i / 23 + 1.7) * 1.4 + Math.sin(i / 7 + 0.4) * 0.6 + (rand() - 0.5) * 0.7;
+    }
+  } else if (dplus > 0) {
+    const isLoop = /loop/i.test(activity.name || '');
     const nMaj = dplus > 600 ? 2 + Math.floor(rand() * 2) : dplus > 150 ? 1 + Math.floor(rand() * 2) : 1;
     const shares = Array.from({ length: nMaj }, () => 0.6 + rand() * 0.8);
     const totShare = shares.reduce((x, y) => x + y, 0);
     const knots = [[0, 0]];
     let alt = 0, pos = 0;
     for (let m = 0; m < nMaj; m++) {
-      const blockLen = Math.floor((N / nMaj) * (0.8 + rand() * 0.4));
+      // Loops reserve the last stretch to come back down to the start.
+      const blockLen = Math.floor((N / nMaj) * (0.8 + rand() * 0.4) * (isLoop ? 0.82 : 1));
       const climbLen = Math.max(24, Math.floor(blockLen * (0.45 + rand() * 0.2)));
       const share = dplus * (shares[m] / totShare);
       const k1 = pos + Math.floor(climbLen * (0.3 + rand() * 0.3));
@@ -130,7 +154,11 @@ export function demoStreams(activity) {
       alt -= drop;
       pos += blockLen;
     }
-    knots.push([N - 1, alt]);
+    if (isLoop) {
+      knots.push([Math.min(pos, N - 3), alt], [N - 1, dplus * 0.02 * rand()]);
+    } else {
+      knots.push([N - 1, alt]);
+    }
     for (let i = 0; i < N; i++) {
       let s0 = knots[0], s1 = knots[knots.length - 1];
       for (let kI = 0; kI < knots.length - 1; kI++) {
@@ -148,8 +176,21 @@ export function demoStreams(activity) {
   for (let i = 0; i < N; i++) altitude.push(+((raw[i] - base) * k + 20).toFixed(1));
 
   // Pass 2: pace and HR against the real grade of that terrain.
+  // Grade is smoothed over ~30 s; pace follows it quickly, HR follows slowly
+  // (real HR rises over 1-2 min into a climb, falls faster on the way down).
+  // Steep ground means hiking: no artificial pace floor.
   const isInt = activity._kind === 'intervals';
+  const SG = 6; // 6 samples * 5 s = 30 s smoothing
+  const smGrade = (i) => {
+    let acc = 0, n = 0;
+    for (let j = Math.max(1, i - SG + 1); j <= i; j++) {
+      const step = Math.max(1, (j * 5 * activity.average_speed) - ((j - 1) * 5 * activity.average_speed));
+      acc += (altitude[j] - altitude[j - 1]) / step; n++;
+    }
+    return n ? acc / n : 0;
+  };
   let dist = 0, hr = 105;
+  const vRaw = [];
   for (let i = 0; i < N; i++) {
     const t = i * 5;
     const frac = i / N;
@@ -161,15 +202,27 @@ export function demoStreams(activity) {
       targetHr *= on ? 1.08 : 0.93;
     }
     if (t < 600) { targetV *= 0.9; targetHr *= 0.9 + 0.1 * (t / 600); }
-    const step = i > 0 ? Math.max(1, distance[i - 1] - (distance[i - 2] || 0)) : 5;
-    const grade = i > 0 ? (altitude[i] - altitude[i - 1]) / step : 0;
-    const g = Math.max(-0.25, Math.min(0.25, grade));
-    const v = Math.max(0.8, targetV * (1 - g * 3.2) * (0.97 + rand() * 0.06));
-    hr += (targetHr * (1 + g * 1.1) - hr) * 0.08 + (rand() - 0.5) * 1.6;
+    const g = Math.max(-0.25, Math.min(0.25, smGrade(i)));
+    const floor = g > 0.12 ? 0.45 : 0.8; // hiking on steep ground
+    const v = Math.max(floor, targetV * (1 - g * 3.2) * (0.97 + rand() * 0.06));
+    const hrTarget = Math.min(targetHr * (1 + g * 1.1), DEMO_PROFILE.hrMax - 2);
+    const rate = hrTarget > hr ? 0.045 : 0.12; // rise ~110 s, fall ~40 s
+    hr += (hrTarget - hr) * rate + (rand() - 0.5) * 1.2;
     hr = Math.min(hr, DEMO_PROFILE.hrMax - 2); // never above the athlete's own max
     dist += v * 5;
-    time.push(t); heartrate.push(Math.round(hr)); velocity_smooth.push(+v.toFixed(2));
-    distance.push(Math.round(dist));
+    vRaw.push(v);
+    time.push(t); heartrate.push(Math.round(hr));
+    distance.push(dist);
   }
+  // Smooth pace over a rolling ~30 s window (what a watch shows), then
+  // rescale distance so the stream ends EXACTLY on the declared distance.
+  const scale = activity.distance / dist;
+  for (let i = 0; i < N; i++) {
+    let acc = 0, n = 0;
+    for (let j = Math.max(0, i - SG + 1); j <= i; j++) { acc += vRaw[j]; n++; }
+    velocity_smooth.push(+(Math.max(0.4, (acc / n) * scale)).toFixed(2));
+    distance[i] = Math.round(distance[i] * scale);
+  }
+  distance[N - 1] = activity.distance;
   return { time, heartrate, velocity_smooth, distance, altitude };
 }

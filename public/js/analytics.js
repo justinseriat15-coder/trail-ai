@@ -434,19 +434,27 @@ export function climbingSpeed(segments) {
 }
 
 // 12-week trend of climbing speed (gain-weighted per week) + overall change.
+// Climbing-speed trend from weekly vertMph values: a rolling 3-week median
+// line (robust to one-off weeks), and change = mean of first 4 vs last 4
+// weeks with data.
 export function climbTrend(perWeek) {
-  const pts = perWeek.filter((w) => w.vertMph != null);
+  const pts = perWeek.map((w) => ({ ...w }));
+  const vals = pts.map((w) => w.vertMph);
+  const med = vals.map((_, i) => {
+    const win = vals.slice(Math.max(0, i - 2), i + 1).filter((v) => v != null).sort((a, b) => a - b);
+    return win.length ? win[Math.floor(win.length / 2)] : null;
+  });
+  pts.forEach((w, i) => { w.rolling = med[i]; });
+  const have = pts.filter((w) => w.vertMph != null);
   let changePct = null;
-  if (pts.length >= 4) {
-    const n = Math.max(1, Math.floor(pts.length / 3));
-    const avg = (arr) => arr.reduce((s, p) => s + p.vertMph, 0) / arr.length;
-    changePct = +(((avg(pts.slice(-n)) - avg(pts.slice(0, n))) / avg(pts.slice(0, n))) * 100).toFixed(1);
+  if (have.length >= 6) {
+    const avg = (arr) => arr.reduce((t, w) => t + w.vertMph, 0) / arr.length;
+    const first = avg(have.slice(0, 4)), last = avg(have.slice(-4));
+    changePct = +(((last - first) / first) * 100).toFixed(1);
   }
   return { points: pts, changePct };
 }
 
-// Aerobic engine: the flat-only EF re-expressed as the pace you hold at a
-// reference easy heart rate (mid-Z2). Linearity holds within easy zones.
 export function aerobicEngine(activities, hrMax) {
   const refHr = Math.round(hrMax * 0.74);
   const trend = efTrend(activities, hrMax);
@@ -471,28 +479,27 @@ export function engineReading(changePct) {
 // The "Today" verdict: one decision and one sentence, from the numbers only.
 // Deterministic - demo needs no model call, live regenerates on new data.
 export function todayVerdict({ deltaPct, engineChangePct, easySharePct, hoursAgo }) {
-  const nums = [];
-  if (deltaPct != null) nums.push(`${deltaPct > 0 ? '+' : ''}${deltaPct}% load vs usual`);
-  if (engineChangePct != null) nums.push(`engine ${engineChangePct > 0 ? '+' : ''}${engineChangePct}%`);
-  else if (easySharePct != null) nums.push(`${easySharePct}% easy running`);
+  const loadNum = deltaPct != null ? [`${deltaPct > 0 ? '+' : ''}${deltaPct}%`, 'load vs usual'] : null;
+  const engNum = engineChangePct != null ? [`${engineChangePct > 0 ? '+' : ''}${engineChangePct}%`, 'aerobic engine'] : null;
+  const easyNum = easySharePct != null ? [`${easySharePct}%`, 'easy share'] : null;
   if (deltaPct == null) {
-    return { decision: 'Easy day', tone: 'neutral', sentence: 'Not enough history to judge the load yet. Keep today easy and let the data build up.', numbers: nums };
+    return { decision: 'Easy day', tone: 'neutral', sentence: 'Not enough history to judge the load yet. Keep today easy and let the data build up.', numbers: [] };
   }
   if (deltaPct >= 45) {
-    return { decision: 'Rest', tone: 'serious', sentence: `Load is ${deltaPct}% above your usual. That is spike territory: today is for recovery, not for proving anything.`, numbers: nums };
+    return { decision: 'Rest', tone: 'serious', sentence: `Load is ${deltaPct}% above your usual. That is spike territory: today is for recovery, not for proving anything.`, numbers: [loadNum, easyNum || engNum].filter(Boolean) };
   }
   if (deltaPct >= 30) {
-    return { decision: 'Easy day', tone: 'warning', sentence: `Load is ${deltaPct}% above your usual. If you go out, keep it short and genuinely easy.`, numbers: nums };
+    return { decision: 'Easy day', tone: 'warning', sentence: `Load is ${deltaPct}% above your usual. If you go out, keep it short and genuinely easy.`, numbers: [loadNum, easyNum || engNum].filter(Boolean) };
   }
   if (deltaPct <= -40) {
-    return { decision: 'Train', tone: 'good', sentence: `A lighter spell (${deltaPct}% vs your usual). If that was planned, good - if not, today is a good day to get back out.`, numbers: nums };
+    return { decision: 'Train', tone: 'good', sentence: `A lighter spell (${deltaPct}% vs your usual). If that was planned, good - if not, today is a good day to get back out.`, numbers: [loadNum, easyNum || engNum].filter(Boolean) };
   }
   if (engineChangePct != null && engineChangePct <= -3) {
-    return { decision: 'Easy day', tone: 'neutral', sentence: 'Load is fine but the aerobic engine has dipped. Keep today aerobic and honest.', numbers: nums };
+    return { decision: 'Easy day', tone: 'neutral', sentence: 'Load is fine but the aerobic engine has dipped. Keep today aerobic and honest.', numbers: [loadNum, engNum].filter(Boolean) };
   }
   const engineBit = engineChangePct != null && engineChangePct >= 3 ? ' and the engine is still improving' : '';
   const freshBit = hoursAgo != null && hoursAgo < 20 ? ' Legs had less than a day since the last one - keep it steady.' : '';
-  return { decision: 'Train', tone: 'good', sentence: `Load is where your body expects it${engineBit}. Green light.${freshBit}`, numbers: nums };
+  return { decision: 'Train', tone: 'good', sentence: `Load is where your body expects it${engineBit}. Green light.${freshBit}`, numbers: [loadNum, engNum || easyNum].filter(Boolean) };
 }
 
 // Short coach reading of one session, from its own numbers.

@@ -17,8 +17,8 @@
   --moss-soft: rgba(78, 122, 67, .14);
   --good: #4e7a43;
   --warning: #b07d10;
-  --serious: #c25a1e;
-  --critical: #b03010;
+  --serious: #8a5c0d;
+  --critical: #8a5c0d;
   --z1: #9ab8cc; --z2: #5e93b5; --z3: #d9b84a; --z4: #dc7a33; --z5: #c23d20;
   --mono: 'DM Mono', ui-monospace, monospace;
   --sans: 'Archivo', system-ui, sans-serif;
@@ -71,7 +71,8 @@ button { font: inherit; cursor: pointer; }
 @keyframes reveal { to { clip-path: inset(-20px 0 -20px 0); } }
 .pf-area { fill: url(#pf); }
 .pf-line { fill: none; stroke: var(--brand); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.pf-mark { position: absolute; transform: translate(-50%, calc(-100% - 14px)); display: flex; flex-direction: column; align-items: center; text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .6px; text-transform: uppercase; line-height: 1.5; white-space: nowrap; opacity: 0; animation: fade .5s 1.7s forwards; }
+.pf-mark { position: absolute; transform: translate(-50%, calc(-100% - 14px)); display: flex; flex-direction: column; align-items: center; text-align: center; font-family: var(--mono); font-size: 10px; line-height: 1.5; white-space: nowrap; opacity: 0; animation: fade .5s 1.7s forwards; }
+.pf-mark b { font-variant-caps: small-caps; letter-spacing: .8px; }
 .pf-mark b { font-weight: 500; color: var(--text); }
 .pf-mark span { color: var(--text-3); font-size: 9px; }
 .pf-mark::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); border: 2px solid var(--brand); position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%); }
@@ -159,7 +160,7 @@ button { font: inherit; cursor: pointer; }
 .today-chip.good { background: var(--moss); }
 .today-chip.neutral { background: var(--text); }
 .today-chip.warning { background: var(--warning); }
-.today-chip.serious { background: var(--critical); }
+.today-chip.serious { background: var(--serious); }
 .today-sentence { font-size: clamp(15px, 1.5vw, 17px); line-height: 1.5; color: var(--text); max-width: 58ch; }
 .today-nums { display: flex; gap: clamp(14px, 2.4vw, 28px); flex-shrink: 0; }
 .today-nums div { display: flex; flex-direction: column; }
@@ -202,9 +203,9 @@ button { font: inherit; cursor: pointer; }
 .easybar { display: grid; gap: 10px; }
 .easybar-row { display: grid; grid-template-columns: 92px 1fr 110px; align-items: center; gap: 12px; font-size: 12px; color: var(--text-2); }
 .easybar-track { position: relative; height: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
-.easybar-fill { position: absolute; inset: 0 auto 0 0; background: var(--moss); border-radius: 99px; }
+.easybar-fill { position: absolute; inset: 0 auto 0 0; background: var(--text); border-radius: 99px; }
 .easybar-fill.low { background: var(--serious); }
-.easybar-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
+.easybar-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--moss); }
 .easybar-row b { font-variant-numeric: tabular-nums; text-align: right; }
 .easybar-row b span { font-weight: 400; color: var(--text-3); font-size: 11px; }
 @media (max-width: 560px) { .easybar-row { grid-template-columns: 74px 1fr 90px; } }
@@ -228,7 +229,8 @@ button { font: inherit; cursor: pointer; }
 .phero-area { fill: url(#dgrad); }
 .phero-line { fill: none; stroke: var(--brand); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .phero-climb { fill: var(--brand-soft); }
-.phero-annot { font-family: var(--mono); font-size: 9px; letter-spacing: .5px; text-transform: uppercase; fill: var(--text-2); }
+.phero-annot { font-family: var(--mono); font-size: 9.5px; fill: var(--text-2); }
+.phero-annot .sc { font-variant-caps: small-caps; letter-spacing: .8px; }
 .phero-annot.sub { fill: var(--text-3); }
 .phero-dot { fill: var(--bg); stroke: var(--brand); stroke-width: 2; }
 .phero-tick { font-family: var(--body); font-size: 10px; fill: var(--text-3); }

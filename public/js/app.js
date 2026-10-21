@@ -1,7 +1,7 @@
 import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
-  aerobicEngine, engineReading, todayVerdict, sessionReading,
+  aerobicEngine, engineReading, todayVerdict, sessionReading, climbTrend,
   timeInZones, decoupling, zoneBounds, METRIC_INFO,
 } from './analytics.js';
 
@@ -98,9 +98,12 @@ const endLabelPlugin = {
     const { ctx } = chart;
     ctx.save();
     ctx.font = `600 12px 'Inter', sans-serif`;
-    ctx.fillStyle = opts.color || css('--text');
     ctx.textAlign = 'right';
-    ctx.fillText(opts.text, pt.x - 8, pt.y - 10);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = css('--surface');
+    ctx.strokeText(opts.text, pt.x - 8, pt.y - 12);
+    ctx.fillStyle = opts.color || css('--text');
+    ctx.fillText(opts.text, pt.x - 8, pt.y - 12);
     ctx.restore();
   },
 };
@@ -197,7 +200,7 @@ function render() {
     }
     return { week: w.week, vertMph: secs >= 300 && gain > 0 ? Math.round(gain / (secs / 3600)) : null };
   });
-  const ct = climbTrendLocal(climbWeeks);
+  const ct = climbTrend(climbWeeks);
 
   // --- Today verdict
   const lastRun = acts.filter(isRun)[0];
@@ -207,9 +210,7 @@ function render() {
   chip.textContent = v.decision;
   chip.className = `today-chip ${v.tone}`;
   $('t-sentence').textContent = v.sentence;
-  const nums = [];
-  if (lv.deltaPct != null) nums.push([`${lv.deltaPct > 0 ? '+' : ''}${lv.deltaPct}%`, 'load vs usual']);
-  if (eng.changePct != null) nums.push([`${eng.changePct > 0 ? '+' : ''}${eng.changePct}%`, 'aerobic engine']);
+  const nums = v.numbers;
   $('t-nums').replaceChildren(...nums.map(([b, s]) => {
     const d = document.createElement('div');
     const bb = document.createElement('b'); bb.textContent = b;
@@ -243,9 +244,11 @@ function render() {
 
   const lastVert = [...climbWeeks].reverse().find((w) => w.vertMph != null)?.vertMph;
   $('k-climb').textContent = lastVert == null ? '—' : `${lastVert} m/h`;
-  $('k-climb-sub').textContent = ct.changePct == null
+  const climbSub = $('k-climb-sub');
+  climbSub.textContent = ct.changePct == null
     ? (lastVert == null ? 'no sustained climbs lately' : 'not enough climbing for a trend')
     : `${ct.changePct > 0 ? 'up' : 'down'} ${Math.abs(ct.changePct)}% over 12 weeks`;
+  climbSub.className = 'kpi-sub' + (ct.changePct == null ? '' : ct.changePct >= 3 ? ' on-target' : ct.changePct <= -3 ? ' caution' : '');
   if (tipRefs.climb) tipRefs.climb.live.textContent = lastVert == null
     ? 'No sustained climbs (50 m or more at 5% or steeper) in the recent sessions.'
     : `Right now: about ${lastVert} vertical metres per hour on sustained climbs.`;
@@ -253,7 +256,9 @@ function render() {
   if (eng.latestSecPerKm) {
     const m = Math.floor(eng.latestSecPerKm / 60), s2 = String(Math.round(eng.latestSecPerKm % 60)).padStart(2, '0');
     $('k-engine').innerHTML = `${m}:${s2} <small>/km at ${eng.refHr} bpm</small>`;
-    $('k-engine-sub').textContent = eng.changePct == null ? 'not enough flat easy runs' : `${engineReading(eng.changePct)} (${eng.changePct > 0 ? '+' : ''}${eng.changePct}%)`;
+    const engSub = $('k-engine-sub');
+    engSub.textContent = eng.changePct == null ? 'not enough flat easy runs' : `${engineReading(eng.changePct)} (${eng.changePct > 0 ? '+' : ''}${eng.changePct}%)`;
+    engSub.className = 'kpi-sub' + (eng.changePct == null ? '' : eng.changePct >= 3 ? ' on-target' : eng.changePct <= -3 ? ' caution' : '');
   } else {
     $('k-engine').textContent = '—';
     $('k-engine-sub').textContent = 'not enough flat easy runs';
@@ -268,47 +273,68 @@ function render() {
     type: 'bar',
     data: {
       labels: weeks.map((w) => label(w.week)),
-      datasets: [
-        {
-          type: 'line', label: 'D+', data: weeks.map((w, i) => (i === weeks.length - 1 ? null : w.dplus)), yAxisID: 'y1',
-          borderColor: css('--moss'), borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: .3,
-        },
-        {
-          label: 'Hours', data: weeks.map((w) => w.hours),
-          backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.82)')),
-          borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
-        },
-      ],
+      datasets: [{
+        label: 'Hours', data: weeks.map((w) => w.hours),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.82)')),
+        borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
+      }],
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ...gridX, ticks: { display: false } },
+        y: { ...gridY, title: { display: true, text: 'hours' }, beginAtZero: true },
+      },
+      plugins: { tooltip: { callbacks: {
+        title: (it) => `Week of ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (in progress)' : ''}`,
+        label: (it) => { const w = weeks[it.dataIndex]; return `${w.hours} h · ${w.km} km · ${w.count} session${w.count === 1 ? '' : 's'}`; },
+      } } },
+    },
+  });
+
+  // D+ as its own aligned strip underneath, same date axis (labels only here).
+  draw('c-dplus', {
+    type: 'bar',
+    data: {
+      labels: weeks.map((w) => label(w.week)),
+      datasets: [{
+        label: 'D+', data: weeks.map((w) => w.dplus),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.38)')),
+        borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
+      }],
     },
     options: {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ...gridX, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } },
-        y: { ...gridY, title: { display: true, text: 'hours' }, beginAtZero: true },
-        y1: { position: 'right', grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 4 }, title: { display: true, text: 'm D+' }, beginAtZero: true },
+        y: { ...gridY, title: { display: true, text: 'm D+' }, beginAtZero: true },
       },
-      plugins: { endLabel: { dataset: 0, text: 'D+', color: css('--moss') }, tooltip: { callbacks: {
+      plugins: { endLabel: { text: `${weeks[weeks.length - 1].dplus.toLocaleString('en-GB')} m`, color: css('--text-2') }, tooltip: { callbacks: {
         title: (it) => `Week of ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (in progress)' : ''}`,
-        label: (it) => { const w = weeks[it.dataIndex]; return it.datasetIndex === 0 ? `${w.dplus.toLocaleString('en-GB')} m of climbing` : `${w.hours} h · ${w.km} km · ${w.count} session${w.count === 1 ? '' : 's'}`; },
+        label: (it) => `${weeks[it.dataIndex].dplus.toLocaleString('en-GB')} m of climbing`,
       } } },
     },
     plugins: [endLabelPlugin],
   });
 
   // --- Climbing speed trend
-  const cw = climbWeeks;
+  const cw = ct.points;
+  const lastRoll = [...cw].reverse().find((w) => w.rolling != null)?.rolling;
   draw('c-climb', {
     type: 'line',
     data: {
       labels: cw.map((w) => w.week),
-      datasets: [{ data: cw.map((w) => w.vertMph), borderColor: css('--brand'), borderWidth: 2, tension: .3, spanGaps: true, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: css('--surface'), pointBorderColor: css('--brand'), pointBorderWidth: 2 }],
+      datasets: [
+        { data: cw.map((w) => w.vertMph), showLine: false, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: css('--surface'), pointBorderColor: css('--text-3'), pointBorderWidth: 1.5 },
+        { data: cw.map((w) => w.rolling), borderColor: css('--brand'), borderWidth: 2, pointRadius: 0, tension: .3, spanGaps: true },
+      ],
     },
     options: {
       interaction: { mode: 'index', intersect: false },
       scales: { x: { ...gridX, ticks: { maxTicksLimit: 4, callback(v) { return label(this.getLabelForValue(v)); } } }, y: { ...gridY, title: { display: true, text: 'm/h' } } },
-      plugins: { endLabel: { text: lastVert != null ? `${lastVert} m/h` : '', color: css('--brand-2') }, tooltip: { callbacks: {
+      plugins: { endLabel: { dataset: 1, text: lastRoll != null ? `${lastRoll} m/h` : '', color: css('--brand-2') }, tooltip: { callbacks: {
         title: (it) => `Week of ${label(cw[it[0].dataIndex].week)}`,
-        label: (it) => it.raw == null ? 'no sustained climbs' : `${it.raw} vertical metres per hour`,
+        label: (it) => it.raw == null ? 'no sustained climbs' : `${it.raw} m/h${it.datasetIndex === 1 ? ' (rolling median)' : ' vertical'}`,
       } } },
     },
     plugins: [endLabelPlugin],
@@ -404,18 +430,6 @@ function render() {
 
 const averageHR = (a) => a.average_heartrate;
 
-// Weekly climbing-speed trend + overall change (gain-weighted).
-function climbTrendLocal(perWeek) {
-  const pts = perWeek.filter((w) => w.vertMph != null);
-  let changePct = null;
-  if (pts.length >= 4) {
-    const n = Math.max(1, Math.floor(pts.length / 3));
-    const avg = (arr) => arr.reduce((s, p) => s + p.vertMph, 0) / arr.length;
-    changePct = +(((avg(pts.slice(-n)) - avg(pts.slice(0, n))) / avg(pts.slice(0, n))) * 100).toFixed(1);
-  }
-  return { points: pts, changePct };
-}
-
 // ---------- Small SVG helpers ----------
 const SVGNS = 'http://www.w3.org/2000/svg';
 function mk(tag, attrs = {}, parent) {
@@ -454,7 +468,7 @@ async function openDetail(id) {
   $('d-hero').replaceChildren();
   $('d-reading').textContent = '';
   setStats(a, null);
-  buildRoute(a.id);
+  buildRoute(a);
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
@@ -541,7 +555,8 @@ function buildHero(streams, climbs) {
     const anchor = x > W - 120 ? 'end' : 'middle';
     const tx = x > W - 120 ? x + 4 : x;
     const t1 = mk('text', { x: tx, y: Y(altTop) - 22, 'text-anchor': anchor, class: 'phero-annot' }, svg);
-    t1.textContent = `Climb · ${c.gain} m D+`;
+    const sc1 = mk('tspan', { class: 'sc' }, t1); sc1.textContent = 'Climb';
+    const rest1 = mk('tspan', {}, t1); rest1.textContent = ` · ${c.gain} m D+`;
     const t2 = mk('text', { x: tx, y: Y(altTop) - 10, 'text-anchor': anchor, class: 'phero-annot sub' }, svg);
     t2.textContent = `${c.vertMph} m/h vertical`;
   });
@@ -572,19 +587,20 @@ function subChart(pts, get, cls, unit, W, X, reverse = false) {
   const line = pts.filter((p) => get(p) != null).map((p) => [X(p.km), Y(get(p))]);
   mk('path', { d: pathFrom(line), class: cls }, svg);
   const loT = mk('text', { x: W - 2, y: Math.min(H - 4, Y(lo) + 10), 'text-anchor': 'end', class: 'phero-tick' }, svg);
-  loT.textContent = unit === 'bpm' ? `${Math.round(rawLo)} bpm` : `${paceFromMinPerKm(rawLo)}`;
+  loT.textContent = unit === 'bpm' ? `${Math.round(rawLo)} bpm` : `${paceFromMinPerKm(rawLo)}${rawLo >= 15 ? ' (hike)' : ''}`;
   const hiT = mk('text', { x: W - 2, y: Math.max(11, Y(hi) - 4), 'text-anchor': 'end', class: 'phero-tick' }, svg);
-  hiT.textContent = unit === 'bpm' ? `${Math.round(rawHi)} bpm` : `${paceFromMinPerKm(rawHi)}`;
+  hiT.textContent = unit === 'bpm' ? `${Math.round(rawHi)} bpm` : `${paceFromMinPerKm(rawHi)}${rawHi >= 15 ? ' (hike)' : ''}`;
   return svg;
 }
 
 const paceFromMinPerKm = (mpk) => `${Math.floor(mpk)}:${String(Math.round((mpk % 1) * 60)).padStart(2, '0')}`;
 
 // Invented route shape on a contour background (demo routes are fictional by design).
-function buildRoute(id) {
+function buildRoute(a) {
   const svg = $('d-route');
   svg.replaceChildren();
-  const rand = mulberry32(Number(id) || 1);
+  const rand = mulberry32(Number(a.id) || 1);
+  const outback = /out-and-back/i.test(a.name || '');
   const loop = (rBase, wobble, phase) => {
     const N = 10;
     const pts = [];
@@ -601,10 +617,32 @@ function buildRoute(id) {
     return d + 'Z';
   };
   for (let c = 0; c < 4; c++) mk('path', { d: loop(118 + c * 16, 0.12, c * 0.9), class: 'route-contour' }, svg);
-  const d = loop(80, 0.55, rand() * 6);
+  let d, startPt;
+  if (outback) {
+    // Out and back: one wobbly line out, the return offset beside it.
+    const pts = [];
+    const N2 = 7;
+    for (let i = 0; i <= N2; i++) {
+      const t = i / N2;
+      pts.push([40 + t * 190 + (i > 0 && i < N2 ? (rand() - 0.5) * 46 : 0), 230 - t * 160 + (i > 0 && i < N2 ? (rand() - 0.5) * 40 : 0)]);
+    }
+    const smooth = (pp) => {
+      let dd = `M${pp[0][0].toFixed(1)},${pp[0][1].toFixed(1)}`;
+      for (let i = 1; i < pp.length; i++) {
+        const p0 = pp[Math.max(0, i - 2)], p1 = pp[i - 1], p2 = pp[i], p3 = pp[Math.min(pp.length - 1, i + 1)];
+        dd += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+      }
+      return dd;
+    };
+    const back = pts.map(([x, y]) => [x + 10, y + 12]).reverse();
+    d = smooth(pts) + ' ' + smooth(back).replace('M', 'L');
+    startPt = pts[0];
+  } else {
+    d = loop(80, 0.55, rand() * 6);
+    startPt = d.match(/M([\d.]+),([\d.]+)/).slice(1);
+  }
   mk('path', { d, class: 'route-line' }, svg);
-  const m = d.match(/M([\d.]+),([\d.]+)/);
-  mk('circle', { cx: m[1], cy: m[2], r: 5, class: 'route-start' }, svg);
+  mk('circle', { cx: startPt[0], cy: startPt[1], r: 5, class: 'route-start' }, svg);
   const lbl = mk('text', { x: 12, y: 288, class: 'route-label' }, svg);
   lbl.textContent = 'Route · fictional in demo';
 }
@@ -635,7 +673,7 @@ function renderZones(streams) {
 // ---------- Chat ----------
 function initChat() {
   addMsg('assistant', state.mode === 'demo'
-    ? "I'm the demo athlete's coach. I have their training load, aerobic efficiency and last 15 sessions. Describe a session as if it were yours, or ask a question."
+    ? "I'm the demo athlete's coach. I track their load vs usual, easy share, climbing speed and aerobic engine, plus the last 15 sessions. Describe a session as if it were yours, or ask a question."
     : 'Connected to your Strava data. Tell me about your session ("good run this morning, heavy legs at the start…") and I\'ll find which one it is.');
   $('chat-form').addEventListener('submit', (e) => { e.preventDefault(); send($('chat-text').value); });
   $('chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('chat-text').value); } });

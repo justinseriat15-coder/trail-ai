@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Trail.AI — Endurance analytics</title>
-<meta name="description" content="Trail running training analytics on Strava data: aerobic efficiency, training load (ACWR), cardiac decoupling, and an AI coach grounded in those metrics.">
+<meta name="description" content="Trail running training analytics on Strava data: load vs usual, easy share, climbing speed, aerobic engine, and an AI coach grounded in those numbers.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -42,7 +42,7 @@
       </svg>
       <div class="pf-mark climb" style="left:32%;top:45%"><b>Z2 on the climb</b><span>152 bpm average</span></div>
       <div class="pf-mark" style="left:62%;top:17%"><b>Summit</b><span>km 13.1, 1,240 m</span></div>
-      <div class="pf-mark end" style="left:99.3%;top:88%"><b>Decoupling 3.1%</b><span>steady to the finish</span></div>
+      <div class="pf-mark end" style="left:99.3%;top:88%"><b>Home straight</b><span>20.4 km, 929 m D+</span></div>
     </figure>
   </section>
 
@@ -57,9 +57,9 @@
       <div class="pv-chat">
         <p class="pv-user">Heavy legs yesterday, felt off.</p>
         <div class="pv-coach">
-          <p>That was Tuesday’s <strong>Easy run Z2</strong>: 7.3 km at 6:26/km, HR 145. Your efficiency (EF 1.07) is in line with your trend, so this isn’t a fitness problem.</p>
-          <p>More likely it’s Sunday’s <strong>Long trail run</strong> still in your legs: 897 m of climbing, TRIMP 216. Your ACWR is 1.08, so the overall load is safe.</p>
-          <p>Keep Thursday easy and move the intervals to Friday.</p>
+          <p>That was Tuesday’s <strong>Easy loop</strong>: 6.8 km at 6:39/km, HR 146. The session itself was fine.</p>
+          <p>More likely it’s Sunday’s <strong>Summit out-and-back</strong> still in your legs: 20.4 km with 929 m of climbing. Your load is +33% vs your usual, above the range to build in, and only 60% of your running is genuinely easy.</p>
+          <p>Today is an easy day. Keep it short, and move the intervals to Friday.</p>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
     <h2>How it works</h2>
     <ol>
       <li><b>Connect Strava</b><p>Sign in once. Your Strava tokens stay encrypted on the server and never reach the browser.</p></li>
-      <li><b>Your runs become metrics</b><p>Each session is turned into training load, aerobic efficiency, cardiac drift and time in heart-rate zones.</p></li>
+      <li><b>Your runs become numbers</b><p>Each session feeds five answers: today’s verdict, load vs usual, easy share, climbing speed and your aerobic engine.</p></li>
       <li><b>Ask the coach</b><p>Describe a session in your own words. The coach finds it and answers with your numbers, not generic advice.</p></li>
     </ol>
   </section>
@@ -80,18 +80,18 @@
     <div class="feat-grid">
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><polyline class="v-soft" points="6,44 22,40 38,42 54,34 70,36 86,28 102,30 118,22 134,20 152,14"/><g class="v-dots"><circle cx="6" cy="46" r="2.5"/><circle cx="22" cy="38" r="2.5"/><circle cx="38" cy="44" r="2.5"/><circle cx="54" cy="32" r="2.5"/><circle cx="70" cy="38" r="2.5"/><circle cx="86" cy="26" r="2.5"/><circle cx="102" cy="32" r="2.5"/><circle cx="118" cy="20" r="2.5"/><circle cx="134" cy="22" r="2.5"/><circle cx="152" cy="12" r="2.5"/></g></svg>
-        <h3>Aerobic efficiency</h3>
-        <p>Efficiency Factor (metres per minute per heartbeat) on comparable flat easy runs. It shows whether your base endurance is improving, whatever the day’s pace.</p>
+        <h3>Load vs usual</h3>
+        <p>Your last 7 days of training load against the average of the 4 weeks before them. It flags sudden jumps, the most common way trail runners get hurt.</p>
       </article>
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><rect class="v-band" x="0" y="18" width="160" height="18"/><polyline class="v-line" points="0,40 20,34 40,30 60,26 80,28 100,22 120,12 140,8 160,14"/></svg>
-        <h3>Load and risk</h3>
-        <p>Banister TRIMP and the acute:chronic workload ratio (ACWR). It flags sudden jumps in load, the most common cause of overuse injuries.</p>
+        <h3>Climbing speed</h3>
+        <p>Vertical metres per hour on sustained climbs, detected from your own altitude stream. The trail-specific fitness number.</p>
       </article>
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><polyline class="v-soft" points="0,30 160,30"/><polyline class="v-line" points="0,40 30,37 60,34 90,30 120,27 160,22"/></svg>
-        <h3>Cardiac decoupling</h3>
-        <p>Second-by-second analysis of how your heart rate drifts at a steady pace, plus time spent in each zone, from Strava streams.</p>
+        <h3>Easy share and engine</h3>
+        <p>How much of your running is genuinely easy (Z1-Z2), and your pace at your easy heart rate on flat runs - whether the base is improving.</p>
       </article>
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><rect class="v-bubble" x="2" y="8" width="118" height="30" rx="8"/><rect class="v-text" x="12" y="17" width="80" height="4" rx="2"/><rect class="v-text" x="12" y="26" width="56" height="4" rx="2"/><rect class="v-bubble me" x="96" y="40" width="62" height="14" rx="7"/></svg>
@@ -155,7 +155,8 @@
 
         <div class="card">
           <div class="card-head"><h2>Weekly time and elevation</h2><span class="card-note">hours and D+ · 12 weeks</span></div>
-          <div class="chart-box"><canvas id="c-week" aria-label="Weekly hours and elevation gain"></canvas></div>
+          <div class="chart-box"><canvas id="c-week" aria-label="Weekly hours"></canvas></div>
+          <div class="chart-box strip"><canvas id="c-dplus" aria-label="Weekly elevation gain"></canvas></div>
         </div>
 
         <div class="two">
@@ -208,9 +209,9 @@
       <div class="chat-log" id="chat-log" aria-live="polite"></div>
       <div class="chips" id="chips">
         <button data-q="Analyse my latest session">Latest session</button>
-        <button data-q="Is my current load consistent? Any injury risk?">Load and risk</button>
-        <button data-q="Is my aerobic endurance improving? Base it on EF.">Aerobic progress</button>
-        <button data-q="Plan my next week based on my current load.">Next week</button>
+        <button data-q="How does my load compare to usual?">Load vs usual</button>
+        <button data-q="How is my climbing speed trending?">Climbing</button>
+        <button data-q="Am I running easy enough? Check my easy share.">Easy share</button>
       </div>
       <form class="chat-input" id="chat-form">
         <textarea id="chat-text" rows="1" maxlength="2000" placeholder="Tell me about your session…" aria-label="Message to the coach"></textarea>
