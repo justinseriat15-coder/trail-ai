@@ -77,22 +77,11 @@ function heroDraw() {
   };
 
   const start = () => {
-    let total = 0;
-    try { total = line.getTotalLength(); } catch { return; }
-    if (!total) return;
-    // Length of the path up to a given viewBox x (x grows monotonically here).
-    const lengthAtX = (x) => {
-      const N = 600;
-      for (let i = 0; i <= N; i++) {
-        const s = (i / N) * total;
-        if (line.getPointAtLength(s).x >= x) return s;
-      }
-      return total;
-    };
+    // The wipe reveals the figure left to right, so each mark fires when the
+    // eased wipe reaches its x position (x grows monotonically across the viewBox).
     fig.querySelectorAll('.pf-mark').forEach((mark) => {
       const pct = parseFloat(mark.style.left) || 0;
-      const x = (pct / 100) * 1200; // viewBox is 1200 wide, stretched to the figure
-      const t = BASE + DUR * easeInv(Math.min(1, lengthAtX(x) / total));
+      const t = BASE + DUR * easeInv(Math.min(1, pct / 100));
       mark.style.setProperty('--pf-delay', `${Math.round(t)}ms`);
     });
     const begin = () => {

@@ -80,10 +80,12 @@ button { font: inherit; cursor: pointer; }
    --pf-delay per mark from the path length at its x position). The .anim
    class is added by JS only, so no-JS and unsupported browsers get the
    finished figure. */
-.profile.anim .pf-line { stroke-dasharray: 1; stroke-dashoffset: 1; stroke-linecap: round; animation: pf-draw 3.4s ease-in-out .15s forwards; }
-.profile.anim .pf-area { clip-path: inset(-20px 100% -20px 0); animation: pf-wipe 3.4s ease-in-out .15s forwards; }
+/* The reveal is a clip-path wipe on both the line and the area fill - the
+   same mechanism, so they always advance together. (An earlier version drew
+   the line with stroke-dasharray/pathLength; Chrome on Windows stopped the
+   dash short of the path end, so the line never finished there.) */
+.profile.anim .pf-line, .profile.anim .pf-area { clip-path: inset(-20px 100% -20px 0); animation: pf-wipe 3.4s ease-in-out .15s forwards; }
 .profile.anim .pf-mark { opacity: 0; animation: fade .45s ease-out forwards; animation-delay: var(--pf-delay, 3.4s); }
-@keyframes pf-draw { to { stroke-dashoffset: 0; } }
 @keyframes pf-wipe { to { clip-path: inset(-20px 0 -20px 0); } }
 .pf-mark { position: absolute; transform: translate(-50%, calc(-100% - 14px)); display: flex; flex-direction: column; align-items: center; text-align: center; font-family: var(--mono); font-size: 10px; line-height: 1.5; white-space: nowrap; }
 .pf-mark b { font-variant-caps: small-caps; letter-spacing: .8px; }
@@ -93,7 +95,7 @@ button { font: inherit; cursor: pointer; }
 .pf-mark.end { transform: translate(-100%, calc(-100% - 14px)); align-items: flex-end; text-align: right; }
 .pf-mark.end::after { left: auto; right: -4px; transform: none; }
 @keyframes fade { to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .profile.anim .pf-line, .profile.anim .pf-area, .profile.anim .pf-mark { animation: none; } .profile.anim .pf-line { stroke-dashoffset: 0; } .profile.anim .pf-area { clip-path: none; } .profile.anim .pf-mark { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .profile.anim .pf-line, .profile.anim .pf-area, .profile.anim .pf-mark { animation: none; clip-path: none; opacity: 1; } }
 
 .preview { padding-top: 8px !important; margin-bottom: clamp(72px, 10vw, 128px) !important; }
 .preview-frame { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 70px -46px rgba(90, 70, 30, .5); }
