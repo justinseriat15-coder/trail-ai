@@ -483,6 +483,8 @@ function render() {
       tr.appendChild(td);
     });
     tr.addEventListener('click', () => openDetail(a.id));
+    tr.addEventListener('pointerenter', () => fetchStreams(a.id).catch(() => {}));
+    tr.addEventListener('focus', () => fetchStreams(a.id).catch(() => {}));
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') openDetail(a.id); });
     tbody.appendChild(tr);
   }
@@ -517,36 +519,96 @@ function mulberry32(seed) {
 }
 
 // ---------- Activity detail ----------
+// Streams cache: rows prefetch on hover/focus so the data is usually local by
+// the time of the click - which is also what makes the row -> detail morph
+// able to target the real profile instead of a cross-fade.
+const streamsCache = new Map();
+function fetchStreams(id) {
+  const key = `${state.mode}:${id}`;
+  if (!streamsCache.has(key)) {
+    streamsCache.set(key, fetch(`/api/streams?source=${state.mode}&id=${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        return d.streams;
+      })
+      .catch((e) => { streamsCache.delete(key); throw e; }));
+  }
+  return streamsCache.get(key);
+}
+
+const vtOK = () => 'startViewTransition' in document && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 async function openDetail(id) {
   const a = state.activities.find((x) => String(x.id) === String(id));
   if (!a) return;
   state.selectedId = a.id;
-  document.querySelectorAll('.runs tr').forEach((tr) => tr.classList.toggle('sel', tr.dataset.id === String(a.id)));
-  const card = $('detail');
-  card.hidden = false;
-  $('d-title').textContent = `${a.name} · ${dayStr(a.start_date_local)}`;
-  $('d-hero').replaceChildren();
-  $('d-reading').textContent = '';
-  setStats(a, null);
-  buildRoute(a);
-  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const info = state.insights.perActivity[a.id] || {};
+  const spark = document.querySelector(`.runs tr[data-id="${CSS.escape(String(a.id))}"] .spark`);
 
+  // Prefetched streams resolve immediately (always in demo mode); only a cold
+  // real-mode click without a prior hover falls through to the async phase.
+  let streams = null;
+  const pending = streamsCache.get(`${state.mode}:${a.id}`);
+  if (pending) { try { streams = await pending; } catch { streams = null; } }
+
+  const fill = () => {
+    document.querySelectorAll('.runs tr').forEach((tr) => tr.classList.toggle('sel', tr.dataset.id === String(a.id)));
+    const card = $('detail');
+    card.hidden = false;
+    $('d-title').textContent = `${a.name} · ${dayStr(a.start_date_local)}`;
+    $('d-hero').replaceChildren();
+    $('d-reading').textContent = '';
+    buildRoute(a);
+    if (streams) {
+      setStats(a, streams, info);
+      buildHero(streams, info.climbs || []);
+      renderZones(streams);
+      writeReading(a, streams, info);
+    } else {
+      setStats(a, null);
+    }
+  };
+
+  const card = $('detail');
+  if (vtOK() && spark && streams) {
+    // Real morph: the row's sparkline grows into the full elevation profile.
+    spark.style.viewTransitionName = 'session-plot';
+    const vt = document.startViewTransition(() => {
+      fill();
+      spark.style.viewTransitionName = 'none';
+      const hero = $('d-hero').querySelector('svg');
+      if (hero) hero.style.viewTransitionName = 'session-plot';
+    });
+    vt.finished.finally(() => {
+      spark.style.viewTransitionName = '';
+      const hero = $('d-hero').querySelector('svg');
+      if (hero) hero.style.viewTransitionName = '';
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  } else {
+    fill();
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  if (streams) return;
   try {
-    const r = await fetch(`/api/streams?source=${state.mode}&id=${encodeURIComponent(a.id)}`);
-    const { streams, error } = await r.json();
-    if (!r.ok) throw new Error(error);
+    const s = await fetchStreams(a.id);
     if (state.selectedId !== a.id) return;
-    const info = state.insights.perActivity[a.id] || {};
-    setStats(a, streams, info);
-    buildHero(streams, info.climbs || []);
-    renderZones(streams);
-    const zones = info.zoneSecs;
-    const flat = ((a.total_elevation_gain || 0) / (a.distance / 1000)) <= 15;
-    const dec = flat ? decoupling(streams) : null;
-    $('d-reading').textContent = sessionReading(a, { zones, climbs: info.climbs || [], dec, flat, hrMax: state.profile.hrMax });
+    setStats(a, s, info);
+    buildHero(s, info.climbs || []);
+    renderZones(s);
+    writeReading(a, s, info);
   } catch (e) {
     $('d-zones').textContent = `Streams unavailable (${e.message}).`;
   }
+}
+
+function writeReading(a, streams, info) {
+  const zones = info.zoneSecs;
+  const flat = ((a.total_elevation_gain || 0) / (a.distance / 1000)) <= 15;
+  const dec = flat ? decoupling(streams) : null;
+  $('d-reading').textContent = sessionReading(a, { zones, climbs: info.climbs || [], dec, flat, hrMax: state.profile.hrMax });
 }
 
 function setStats(a, streams, info = {}) {
@@ -628,8 +690,80 @@ function buildHero(streams, climbs) {
   box.appendChild(svg);
 
   // HR and pace, same distance axis
+  svg._val = (p) => p.alt;
+  svg._getY = Y;
+  svg._H = H;
   if (hr) box.appendChild(subChart(pts, (p) => p.hr, 'phero-hr', 'bpm', W, X));
   if (vel) box.appendChild(subChart(pts, (p) => (p.v > 0.5 ? 1000 / p.v / 60 : null), 'phero-pace', 'min/km', W, X, true));
+  box._pts = pts;
+  box._xMax = xMax;
+  box._plotW = plotW;
+  attachCrosshair(box);
+}
+
+// Synced crosshair across elevation/HR/pace: one distance position, values
+// read out together. Hover on desktop, horizontal drag on mobile. Direct
+// positioning (rAF-throttled) - a tool, not an animation.
+function attachCrosshair(box) {
+  const { _pts: pts, _xMax: xMax, _plotW: plotW } = box;
+  if (!pts?.length) return;
+  const svgs = [...box.querySelectorAll('svg')];
+  for (const svg of svgs) {
+    if (!svg._getY) continue;
+    mk('line', { class: 'xhair-line', x1: -20, x2: -20, y1: 0, y2: svg._H }, svg);
+    mk('circle', { class: 'xhair-dot', r: 3.5, cx: -20, cy: -20 }, svg);
+  }
+  const tip = document.createElement('div');
+  tip.className = 'xhair-tip';
+  tip.hidden = true;
+  box.appendChild(tip);
+
+  const show = (clientX) => {
+    const r = svgs[0].getBoundingClientRect();
+    if (!r.width) return;
+    const x = Math.max(0, Math.min(plotW, ((clientX - r.left) / r.width) * 800));
+    const kmv = (x / plotW) * xMax;
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p.km - kmv) < Math.abs(best.km - kmv)) best = p;
+    for (const svg of svgs) {
+      const line = svg.querySelector('.xhair-line');
+      if (!line) continue;
+      line.setAttribute('x1', x);
+      line.setAttribute('x2', x);
+      const dot = svg.querySelector('.xhair-dot');
+      const val = svg._val ? svg._val(best) : null;
+      if (val != null) {
+        dot.setAttribute('cx', x);
+        dot.setAttribute('cy', svg._getY(val));
+        dot.style.display = '';
+      } else dot.style.display = 'none';
+    }
+    tip.textContent = `${best.km.toFixed(1)} km · ${Math.round(best.alt)} m`
+      + (best.hr ? ` · ${Math.round(best.hr)} bpm` : '')
+      + (best.v > 0.5 ? ` · ${paceStr(best.v)}/km` : '');
+    tip.hidden = false;
+    const br = box.getBoundingClientRect();
+    const px = (x / 800) * br.width;
+    tip.style.left = `${Math.max(4, Math.min(br.width - tip.offsetWidth - 4, px - tip.offsetWidth / 2))}px`;
+  };
+  const hide = () => {
+    tip.hidden = true;
+    for (const svg of svgs) {
+      const line = svg.querySelector('.xhair-line');
+      if (line) { line.setAttribute('x1', -20); line.setAttribute('x2', -20); }
+      const dot = svg.querySelector('.xhair-dot');
+      if (dot) dot.style.display = 'none';
+    }
+  };
+  let raf = 0;
+  let lastX = 0;
+  box.addEventListener('pointermove', (e) => {
+    lastX = e.clientX;
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; show(lastX); });
+  });
+  box.addEventListener('pointerleave', hide);
+  box.addEventListener('pointercancel', hide);
 }
 
 function subChart(pts, get, cls, unit, W, X, reverse = false) {
@@ -651,6 +785,9 @@ function subChart(pts, get, cls, unit, W, X, reverse = false) {
   loT.textContent = unit === 'bpm' ? `${Math.round(rawLo)} bpm` : `${paceFromMinPerKm(rawLo)}${rawLo >= 15 ? ' (hike)' : ''}`;
   const hiT = mk('text', { x: W - 2, y: Math.max(11, Y(hi) - 4), 'text-anchor': 'end', class: 'phero-tick' }, svg);
   hiT.textContent = unit === 'bpm' ? `${Math.round(rawHi)} bpm` : `${paceFromMinPerKm(rawHi)}${rawHi >= 15 ? ' (hike)' : ''}`;
+  svg._val = get;
+  svg._getY = Y;
+  svg._H = H;
   return svg;
 }
 
