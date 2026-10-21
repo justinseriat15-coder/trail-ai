@@ -218,8 +218,8 @@ button { font: inherit; cursor: pointer; }
 .race-lead b small { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--text-2); margin-left: 6px; }
 .race-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .race-form[hidden] { display: none; }
-.race-form label { display: grid; gap: 4px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; }
-.race-form input { font: inherit; font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; min-height: 44px; }
+.race-form label { display: grid; min-width: 0; gap: 4px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; }
+.race-form input { font: inherit; font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; min-height: 44px; width: 100%; min-width: 0; box-sizing: border-box; }
 .race-form input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .race-form-actions, .race-form .card-foot { grid-column: 1 / -1; }
 .race-form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -352,3 +352,7 @@ a:focus-visible, button:focus-visible, textarea:focus-visible, tr:focus-visible 
 @media (max-width: 700px) { .tip-bubble { left: auto; right: -8px; width: min(240px, 62vw); } }
 .stat-note { grid-column: 1 / -1; font-size: 11px; color: var(--text-2); margin: 2px 0 0; }
 #d-zones .stat-note { margin-top: 8px; }
+
+.card[data-metric=race] .card-head { flex-wrap: wrap; align-items: center; }
+.card[data-metric=race] .card-head h2 { white-space: nowrap; }
+.card[data-metric=race] .card-head .card-note { flex: 1 1 auto; text-align: right; }
