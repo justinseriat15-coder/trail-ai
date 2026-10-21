@@ -1,0 +1,29 @@
+/* B. Hybrid: landing in Night topo blue, dashboard and session detail on topo paper. Same red, same type. */
+@import url('/themes/night-core.css');
+/* Night variables apply only while the landing is showing. */
+:root:has(#landing:not([hidden])) {
+  color-scheme: dark;
+  --bg: #0e1721; --surface: #131f2b; --surface-2: #192838; --border: #22354a; --border-strong: #345069;
+  --text: #e8e6df; --text-2: #b4bfc8; --text-3: #8a9cad;
+  --brand: #d63f17; --brand-2: #ff7a52; --brand-soft: rgba(214,63,23,.18);
+  --moss: #86b377; --moss-soft: rgba(134,179,119,.16); --good: #86b377; --ochre: #d6a63c;
+  --contour: rgba(159,196,224,.13); --rule: #345069; --ink: #e8e6df;
+}
+/* The ink-blue top bar stays on both sides, so the move from landing to dashboard keeps one fixed edge. */
+.topbar { --text: #e8e6df; --text-2: #b4bfc8; --text-3: #8a9cad; --border-strong: #345069; --brand: #d63f17; background: #0e1721; color: #e8e6df; backdrop-filter: none; border-bottom: 1px solid #345069; }
+.topbar .mode-pill { background: transparent; border-color: #345069; }
+.topbar .btn-ghost { border-color: #345069; }
+:root:has(#landing:not([hidden])) .btn-secondary { border-color: var(--text-3); }
+:root:has(#landing:not([hidden])) .hero .topo { display: none; }
+:root:has(#landing:not([hidden])) .pf-area { fill: rgba(214,63,23,.14); }
+:root:has(#landing:not([hidden])) .pf-mark::after { background: var(--bg); }
+:root:has(#landing:not([hidden])) .pv-coach { background: var(--surface-2); }
+/* Contours: hero text area only (never behind the profile chart). */
+.hero::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: calc(100% - clamp(150px, 20vw, 240px) - 36px); background: url(/themes/contours-night.svg) 70% 20% / cover no-repeat; -webkit-mask-image: radial-gradient(ellipse 75% 95% at 82% 30%, #000 20%, transparent 78%); mask-image: radial-gradient(ellipse 75% 95% at 82% 30%, #000 20%, transparent 78%); }
+/* Dashboard: paper stays as is; the verdict band gets a thin night-blue rule from the top bar. */
+#app .today { border-top-color: var(--text); }
+/* Paper side: the same contour map in brown ink, only in the empty corners (verdict band, bottom of the coach column). */
+#app .today::before { content: ''; position: absolute; z-index: -1; top: 0; right: 0; width: 46%; height: 52%; background: url(/themes/contours-ink.svg) 60% 30% / 900px auto no-repeat; -webkit-mask-image: linear-gradient(270deg, #000 20%, transparent); mask-image: linear-gradient(270deg, #000 20%, transparent); }
+.col-chat { isolation: isolate; }
+.col-chat::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; height: 46%; background: url(/themes/contours-ink.svg) 30% 80% / 760px auto no-repeat; -webkit-mask-image: linear-gradient(0deg, #000 30%, transparent); mask-image: linear-gradient(0deg, #000 30%, transparent); }
+@media (max-width: 1000px) { .col-chat { position: relative; } }

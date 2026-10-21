@@ -1,0 +1,33 @@
+/* A. Night topo everywhere, fixed. */
+@import url('/themes/night-core.css');
+:root {
+  color-scheme: dark;
+  --bg: #0e1721; --surface: #131f2b; --surface-2: #192838; --border: #22354a; --border-strong: #345069;
+  --text: #e8e6df; --text-2: #b4bfc8; --text-3: #8a9cad;           /* AA on --bg and --surface-2 */
+  --brand: #d63f17; --brand-2: #ff7a52; --brand-soft: rgba(214,63,23,.18);
+  --moss: #86b377; --moss-soft: rgba(134,179,119,.16); --good: #86b377;
+  --warning: #d6a63c; --serious: #d6a63c; --critical: #d6a63c; --ochre: #d6a63c;
+  --z1: #5f86a3; --z2: #7fb0c9; --z3: #d6b755; --z4: #e08a45; --z5: #e0482a;
+  --contour: rgba(159,196,224,.13); --chart-grid: rgba(159,196,224,.12);
+  --bar-strong: rgba(232,230,223,.86); --bar-soft: rgba(232,230,223,.34);
+  --rule: #345069; --ink: #e8e6df;
+}
+html, body { background: var(--bg); }
+.topbar { background: var(--bg); backdrop-filter: none; border-bottom: 1px solid var(--rule); }
+.demo-banner { background: transparent; border-bottom-color: var(--rule); }
+.btn-secondary { border-color: var(--text-3); }
+.hero .topo { display: none; }
+.pf-area { fill: rgba(214,63,23,.14); }
+.phero-area { fill: rgba(214,63,23,.12); }
+.pf-mark::after { background: var(--bg); }
+.phero-dot { fill: var(--bg); }
+.skel::after { background: rgba(159,196,224,.06); }
+.runs tbody tr:hover, .runs tbody tr.sel { background: var(--surface-2); }
+
+/* Contours live only in the hero and in empty areas: never behind the chart, numbers or cards. */
+.hero::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: calc(100% - clamp(150px, 20vw, 240px) - 36px); background: url(/themes/contours-night.svg) 70% 20% / cover no-repeat; -webkit-mask-image: radial-gradient(ellipse 75% 95% at 82% 30%, #000 20%, transparent 78%); mask-image: radial-gradient(ellipse 75% 95% at 82% 30%, #000 20%, transparent 78%); }
+.today::before { content: ''; position: absolute; z-index: -1; top: 0; right: 0; width: 46%; height: 52%; background: url(/themes/contours-night.svg) 60% 30% / 900px auto no-repeat; -webkit-mask-image: linear-gradient(270deg, #000 20%, transparent); mask-image: linear-gradient(270deg, #000 20%, transparent); }
+.col-chat { position: sticky; isolation: isolate; }
+.col-chat::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; height: 46%; background: url(/themes/contours-night.svg) 30% 80% / 760px auto no-repeat; -webkit-mask-image: linear-gradient(0deg, #000 30%, transparent); mask-image: linear-gradient(0deg, #000 30%, transparent); }
+@media (max-width: 1000px) { .col-chat { position: relative; } }
+.foot { position: relative; }

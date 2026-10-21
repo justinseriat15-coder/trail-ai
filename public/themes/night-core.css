@@ -1,0 +1,34 @@
+/* Night topo mockups: the two borrowings shared by A and B.
+   1. Ruled sections instead of boxed cards (from Alpine).
+   2. The verdict as a large condensed headline instead of a badge (from Editorial).
+   Colours come from variables, so the same file works on night blue and on topo paper. */
+:root { --ochre: #946600; --rule: var(--border-strong); --ink: var(--text); }
+
+/* ---- 1. Ruled sections ---- */
+.card, .kpi, .preview-frame, .arch-flow { background: none; border: 0; border-top: 1px solid var(--rule); border-radius: 0; box-shadow: none; padding-left: 0; padding-right: 0; }
+.card { padding-top: 14px; }
+.card-head { border-bottom: 0; padding-bottom: 0; margin-bottom: 10px; }
+.kpis { gap: 0 22px; }
+.kpi { border-top: 2px solid var(--ink); padding: 12px 0 14px; }
+.col-chat { background: none; }
+.col-data { padding-left: clamp(16px, 2.4vw, 32px); padding-right: clamp(16px, 2.4vw, 32px); }
+.preview-frame { border-bottom: 1px solid var(--rule); }
+.arch-flow { border-bottom: 1px solid var(--rule); }
+.arch-node.accent { background: none; }
+.easybar-track, .race-track { border-radius: 0; height: 8px; border: 0; background: var(--surface-2); }
+.easybar-fill, .race-fill, .zone-bar { border-radius: 0; }
+.route-wrap { border-radius: 0; background: var(--surface-2); }
+.msg.assistant { background: var(--surface-2); border: 0; }
+.pv-coach { background: var(--surface-2); border: 0; }
+.btn-primary, .btn-secondary, .btn-ghost, .mode-pill, .chips button, .msg, .pv-user, .pv-coach, .chat-input textarea, .chat-input button { border-radius: 2px; }
+.tip-bubble { border-radius: 2px; box-shadow: none; }
+
+/* ---- 2. Verdict as a headline ---- */
+.today { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 32px; background: none; border: 0; border-top: 2px solid var(--ink); border-radius: 0; box-shadow: none; padding: 14px 0 22px; position: relative; isolation: isolate; }
+.today-main { display: block; }
+.today-chip, .today-chip.good, .today-chip.neutral, .today-chip.warning, .today-chip.serious, .today-chip.critical { display: block; background: none; border: 0; border-radius: 0; padding: 0; color: var(--ink); font-family: var(--sans); font-stretch: 62%; font-weight: 850; text-transform: uppercase; font-size: clamp(64px, 10vw, 128px); line-height: .88; letter-spacing: -.005em; margin: 0 0 14px; }
+.today-chip.good { color: var(--moss); }
+.today-chip.warning { color: var(--ochre); }
+.today-sentence { max-width: 52ch; }
+.today-nums { align-self: end; }
+@media (max-width: 760px) { .today { grid-template-columns: 1fr; } .today-chip, .today-chip.good, .today-chip.neutral, .today-chip.warning, .today-chip.serious, .today-chip.critical { font-size: clamp(64px, 24vw, 104px); } }
