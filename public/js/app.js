@@ -87,8 +87,13 @@ const endLabelPlugin = {
   id: 'endLabel',
   afterDatasetsDraw(chart, _args, opts) {
     if (!opts?.text) return;
-    const meta = chart.getDatasetMeta(opts.dataset ?? 0);
-    const pt = meta.data[meta.data.length - 1];
+    const di = opts.dataset ?? 0;
+    const meta = chart.getDatasetMeta(di);
+    const data = chart.data.datasets[di].data;
+    let pt = null;
+    for (let i = meta.data.length - 1; i >= 0; i--) {
+      if (data[i] != null && meta.data[i]) { pt = meta.data[i]; break; }
+    }
     if (!pt) return;
     const { ctx } = chart;
     ctx.save();
@@ -265,7 +270,7 @@ function render() {
       labels: weeks.map((w) => label(w.week)),
       datasets: [
         {
-          type: 'line', label: 'D+', data: weeks.map((w) => w.dplus), yAxisID: 'y1',
+          type: 'line', label: 'D+', data: weeks.map((w, i) => (i === weeks.length - 1 ? null : w.dplus)), yAxisID: 'y1',
           borderColor: css('--moss'), borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: .3,
         },
         {
