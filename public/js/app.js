@@ -98,12 +98,12 @@ const endLabelPlugin = {
     const { ctx } = chart;
     ctx.save();
     ctx.font = `600 12px 'Inter', sans-serif`;
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'left';
     ctx.lineWidth = 4;
     ctx.strokeStyle = css('--surface');
-    ctx.strokeText(opts.text, pt.x - 8, pt.y - 12);
+    ctx.strokeText(opts.text, pt.x + 8, pt.y - 10);
     ctx.fillStyle = opts.color || css('--text');
-    ctx.fillText(opts.text, pt.x - 8, pt.y - 12);
+    ctx.fillText(opts.text, pt.x + 8, pt.y - 10);
     ctx.restore();
   },
 };
@@ -243,11 +243,13 @@ function render() {
     : `Right now: ${es.d28.pct}% of running time in Z1-Z2 over 28 days (target ~80%), from ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data.`;
 
   const lastVert = [...climbWeeks].reverse().find((w) => w.vertMph != null)?.vertMph;
-  $('k-climb').textContent = lastVert == null ? '—' : `${lastVert} m/h`;
+  const climbNow = ct.points.length ? ([...ct.points].reverse().find((w) => w.rolling != null)?.rolling ?? lastVert) : lastVert;
+  $('k-climb').textContent = climbNow == null ? '—' : `${climbNow} m/h`;
   const climbSub = $('k-climb-sub');
-  climbSub.textContent = ct.changePct == null
+  const climbTrendTxt = ct.changePct == null ? null : `${ct.changePct > 0 ? 'up' : 'down'} ${Math.abs(ct.changePct)}% over 12 weeks`;
+  climbSub.textContent = climbNow == null
     ? (lastVert == null ? 'no sustained climbs lately' : 'not enough climbing for a trend')
-    : `${ct.changePct > 0 ? 'up' : 'down'} ${Math.abs(ct.changePct)}% over 12 weeks`;
+    : ['3-week average', climbTrendTxt].filter(Boolean).join(' · ');
   climbSub.className = 'kpi-sub' + (ct.changePct == null ? '' : ct.changePct >= 3 ? ' on-target' : ct.changePct <= -3 ? ' caution' : '');
   if (tipRefs.climb) tipRefs.climb.live.textContent = lastVert == null
     ? 'No sustained climbs (50 m or more at 5% or steeper) in the recent sessions.'
@@ -307,8 +309,9 @@ function render() {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ...gridX, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } },
-        y: { ...gridY, title: { display: true, text: 'm D+' }, beginAtZero: true },
+        y: { ...gridY, title: { display: true, text: 'm D+' }, beginAtZero: true, ticks: { maxTicksLimit: 2 } },
       },
+      layout: { padding: { right: 64 } },
       plugins: { endLabel: { text: `${weeks[weeks.length - 1].dplus.toLocaleString('en-GB')} m`, color: css('--text-2') }, tooltip: { callbacks: {
         title: (it) => `Week of ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (in progress)' : ''}`,
         label: (it) => `${weeks[it.dataIndex].dplus.toLocaleString('en-GB')} m of climbing`,
@@ -332,6 +335,7 @@ function render() {
     options: {
       interaction: { mode: 'index', intersect: false },
       scales: { x: { ...gridX, ticks: { maxTicksLimit: 4, callback(v) { return label(this.getLabelForValue(v)); } } }, y: { ...gridY, title: { display: true, text: 'm/h' } } },
+      layout: { padding: { right: 64 } },
       plugins: { endLabel: { dataset: 1, text: lastRoll != null ? `${lastRoll} m/h` : '', color: css('--brand-2') }, tooltip: { callbacks: {
         title: (it) => `Week of ${label(cw[it[0].dataIndex].week)}`,
         label: (it) => it.raw == null ? 'no sustained climbs' : `${it.raw} m/h${it.datasetIndex === 1 ? ' (rolling median)' : ' vertical'}`,
@@ -634,7 +638,7 @@ function buildRoute(a) {
       }
       return dd;
     };
-    const back = pts.map(([x, y]) => [x + 10, y + 12]).reverse();
+    const back = pts.map(([x, y]) => [x + 20, y + 22]).reverse();
     d = smooth(pts) + ' ' + smooth(back).replace('M', 'L');
     startPt = pts[0];
   } else {

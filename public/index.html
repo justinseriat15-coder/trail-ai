@@ -49,16 +49,16 @@
   <section class="preview" aria-label="What the dashboard looks like">
     <div class="preview-frame">
       <div class="pv-kpis">
-        <div><span>Last 7 days</span><b id="pv-vol">46.1 km</b><em id="pv-vol-sub">4 sessions, 1,022 m gain</em></div>
-        <div><span>Load vs usual</span><b id="pv-load">+9%</b><em class="ok" id="pv-load-sub">fine</em></div>
-        <div><span>Aerobic engine</span><b id="pv-engine">6:26/km</b><em id="pv-engine-sub">at 145 bpm · improving</em></div>
-        <div><span>This week</span><b id="pv-week">0.8 h</b><em id="pv-week-sub">32 m of climbing so far</em></div>
+        <div><span>Last 7 days</span><b id="pv-vol">46.1 km</b><em id="pv-vol-sub">4 sessions, 1,063 m gain</em></div>
+        <div><span>Load vs usual</span><b id="pv-load">+33%</b><em class="ok" id="pv-load-sub">ease off</em></div>
+        <div><span>Aerobic engine</span><b id="pv-engine">6:35/km</b><em id="pv-engine-sub">at 145 bpm · improving</em></div>
+        <div><span>This week</span><b id="pv-week">0.7 h</b><em id="pv-week-sub">49 m of climbing so far</em></div>
       </div>
       <div class="pv-chat">
         <p class="pv-user">Heavy legs yesterday, felt off.</p>
         <div class="pv-coach">
           <p>That was Tuesday’s <strong>Easy loop</strong>: 6.8 km at 6:39/km, HR 146. The session itself was fine.</p>
-          <p>More likely it’s Sunday’s <strong>Summit out-and-back</strong> still in your legs: 20.4 km with 929 m of climbing. Your load is +33% vs your usual, above the range to build in, and only 60% of your running is genuinely easy.</p>
+          <p>More likely it’s Sunday’s <strong>Summit out-and-back</strong> still in your legs: 20.4 km with 929 m of climbing. Your load is <b id="pvc-load">+33%</b> vs your usual, above the range to build in, and only <b id="pvc-easy">64%</b> of your running is genuinely easy.</p>
           <p>Today is an easy day. Keep it short, and move the intervals to Friday.</p>
         </div>
       </div>
@@ -223,29 +223,7 @@
   </div>
 </main>
 
-<script type="module">
-// Keep the landing preview in sync with the demo dataset it describes.
-import { demoActivities, DEMO_PROFILE } from '/js/demo-data.js';
-import { loadVsUsual, loadReading, aerobicEngine, engineReading, weeklyVolume, isRun, parseLocal, km } from '/js/analytics.js';
-const acts = demoActivities();
-const { hrMax, hrRest } = DEMO_PROFILE;
-const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-const last7 = acts.filter((a) => isRun(a) && Date.now() - parseLocal(a.start_date_local) < 7 * 86400000);
-set('pv-vol', `${km(last7.reduce((t, a) => t + a.distance, 0))} km`);
-set('pv-vol-sub', `${last7.length} sessions, ${Math.round(last7.reduce((t, a) => t + (a.total_elevation_gain || 0), 0)).toLocaleString('en-GB')} m gain`);
-const lv = loadVsUsual(acts, hrMax, hrRest);
-set('pv-load', lv.deltaPct == null ? '—' : `${lv.deltaPct > 0 ? '+' : ''}${lv.deltaPct}%`);
-set('pv-load-sub', loadReading(lv.deltaPct).label.replace(/^.*?vs your usual: /, ''));
-const eng = aerobicEngine(acts, hrMax);
-if (eng.latestSecPerKm) {
-  const m = Math.floor(eng.latestSecPerKm / 60), sec = String(eng.latestSecPerKm % 60).padStart(2, '0');
-  set('pv-engine', `${m}:${sec}/km`);
-  set('pv-engine-sub', `at ${eng.refHr} bpm · ${engineReading(eng.changePct)}`);
-}
-const wk = weeklyVolume(acts, 1)[0];
-set('pv-week', `${wk.hours} h`);
-set('pv-week-sub', `${wk.dplus.toLocaleString('en-GB')} m of climbing so far`);
-</script>
+<script type="module" src="/js/landing.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>

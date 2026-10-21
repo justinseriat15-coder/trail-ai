@@ -198,6 +198,7 @@ button { font: inherit; cursor: pointer; }
 @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
 .chart-box { position: relative; height: 220px; }
 .chart-box.sm { height: 190px; }
+.chart-box.strip { height: 80px; margin-top: 16px; }
 
 /* Easy-share band */
 .easybar { display: grid; gap: 10px; }

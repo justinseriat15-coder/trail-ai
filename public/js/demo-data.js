@@ -129,6 +129,9 @@ export function demoStreams(activity) {
       }
       const span = Math.max(1, s1[0] - s0[0]);
       raw[i] = 20 + s0[1] + ((s1[1] - s0[1]) * (i - s0[0])) / span
+        + (i <= summit
+            ? Math.sin((i / Math.max(30, summit)) * Math.PI * 5 + 0.9) * dplus * 0.045
+            : Math.sin(i / 41 + 0.3) * dplus * 0.012)
         + Math.sin(i / 23 + 1.7) * 1.4 + Math.sin(i / 7 + 0.4) * 0.6 + (rand() - 0.5) * 0.7;
     }
   } else if (dplus > 0) {
@@ -166,6 +169,7 @@ export function demoStreams(activity) {
       }
       const span = Math.max(1, s1[0] - s0[0]);
       raw[i] = 20 + s0[1] + ((s1[1] - s0[1]) * (i - s0[0])) / span
+        + Math.sin((i / N) * Math.PI * 6 + 1.2) * dplus * 0.03
         + Math.sin(i / 23 + 1.7) * 2.2 + Math.sin(i / 7 + 0.4) * 0.8 + (rand() - 0.5) * 0.8;
     }
   }
