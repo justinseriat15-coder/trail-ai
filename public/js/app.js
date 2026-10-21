@@ -2,7 +2,7 @@ import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
   aerobicEngine, engineReading, todayVerdict, sessionReading, climbTrend,
-  timeInZones, decoupling, zoneBounds, METRIC_INFO,
+  timeInZones, decoupling, zoneBounds, METRIC_INFO, raceReadiness,
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
@@ -50,7 +50,7 @@ function makeTip(key) {
 
 function attachTips() {
   document.querySelectorAll('[data-metric]').forEach((el) => {
-    const label = el.querySelector('.kpi-label');
+    const label = el.querySelector('.kpi-label') || el.querySelector('.card-head h2');
     if (label) label.appendChild(makeTip(el.dataset.metric));
   });
 }
@@ -252,7 +252,7 @@ function render() {
     : ['3-week average', climbTrendTxt].filter(Boolean).join(' · ');
   climbSub.className = 'kpi-sub' + (ct.changePct == null ? '' : ct.changePct >= 3 ? ' on-target' : ct.changePct <= -3 ? ' caution' : '');
   if (tipRefs.climb) tipRefs.climb.live.textContent = lastVert == null
-    ? 'No sustained climbs (50 m or more at 5% or steeper) in the recent sessions.'
+    ? 'No sustained climbs (50 m or more at 3% or steeper) in the recent sessions.'
     : `Right now: about ${lastVert} vertical metres per hour on sustained climbs.`;
 
   if (eng.latestSecPerKm) {
@@ -400,6 +400,38 @@ function render() {
   $('easybar-foot').textContent = es.d28.pct == null
     ? 'Needs sessions recorded with heart rate.'
     : `Target ~80% easy. ${esr.label}. Based on ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data in 28 days.`;
+
+  // --- Race readiness (fictional target race)
+  const rr = raceReadiness(acts, { climbNow });
+  $('race-note').textContent = `target: ${rr.race.name} · ${rr.race.distanceKm} km · ${rr.race.dplusM.toLocaleString('en-GB')} m D+`;
+  const rfill = $('race-fill');
+  rfill.style.width = rr.overall == null ? '0' : `${rr.overall}%`;
+  rfill.classList.toggle('full', rr.overall === 100);
+  $('race-pct').textContent = rr.overall == null ? '—' : `${rr.overall}%`;
+  const partRows = [
+    ['Longest run, 12 weeks', rr.parts.distance, (p) => `${p.have} km of ${p.need} km`],
+    ['Biggest D+ week', rr.parts.vertWeek, (p) => `${p.have.toLocaleString('en-GB')} m of ${p.need.toLocaleString('en-GB')} m`],
+    ['Climbing speed', rr.parts.climb, (p) => (p ? `${p.have} m/h of ~${p.need} m/h` : 'no climbs measured')],
+  ];
+  $('race-parts').replaceChildren(...partRows.map(([lbl, p, fmt]) => {
+    const row = document.createElement('div');
+    row.className = 'race-part';
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = lbl;
+    const track = document.createElement('div'); track.className = 'easybar-track';
+    if (p) {
+      const f = document.createElement('div');
+      f.className = 'easybar-fill';
+      f.style.width = `${p.pct}%`;
+      track.appendChild(f);
+    }
+    const v = document.createElement('b');
+    v.textContent = fmt(p);
+    if (p) v.className = p.pct >= 100 ? 'st-ok' : 'st-gap';
+    row.append(l, track, v);
+    return row;
+  }));
+  $('race-sentence').textContent = rr.sentence;
+  if (tipRefs.race) tipRefs.race.live.textContent = rr.sentence;
 
   // --- Recent sessions
   const tbody = $('runs');
