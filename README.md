@@ -8,15 +8,17 @@ Endurance training analytics on Strava data, with an LLM coach that only reasons
 
 ## What it does
 
-You write *"good run this morning, heavy legs at the start"*. The coach identifies which Strava activity you mean, pulls its second-by-second streams, and crosses your feeling with objective markers: cardiac drift, time in zones, current training load, and aerobic efficiency trend.
+A Today verdict (train, easy day or rest) in one sentence, five plain metrics behind it, a race readiness gauge, and a coach you can talk to. You write *"good run this morning, heavy legs at the start"*; the coach identifies which Strava activity you mean, pulls its second-by-second streams, and crosses your feeling with the numbers.
 
 | Metric | Definition | Why it matters |
 |---|---|---|
-| **Efficiency Factor (EF)** | speed (m/min) ÷ average HR, on flat aerobic runs ≥ 20 min | Aerobic fitness: more speed per heartbeat. Filtering on comparable efforts removes terrain and intensity noise. |
-| **TRIMP** (Banister) | minutes × HRr × 0.64 × e^(1.92·HRr) | Internal load of a session, weighting intensity exponentially. |
-| **ACWR** | 7-day load ÷ (28-day load / 4) | Load spikes vs. what the body is adapted to. 0.8-1.3 = sweet spot, > 1.5 = elevated injury risk. |
-| **Aerobic decoupling (Pa:HR)** | EF of 2nd half vs 1st half, after a 10-min warm-up | Aerobic durability. < 5 % = well-developed endurance at that duration. |
-| **Time in zones** | 5-zone %HRmax model on streams | Checks that "easy" runs are actually easy. |
+| **Load vs usual** | Heart-rate load of the last 7 days against the average 7-day load of the 4 weeks before | Spikes are what get runners hurt. Roughly -10% to +15% is the range to build in. |
+| **Easy share** | % of running time in heart-rate zones 1-2, from sessions with HR data | About 80% easy keeps hard days hard. |
+| **Climbing speed** | Vertical metres per hour on sustained climbs (50 m or more of gain at 3% grade or steeper), 3-week average | The trail-specific fitness number. |
+| **Aerobic engine** | Pace at your easy heart rate, from flat easy runs of 20 minutes or more | If this gets faster at the same heart rate, the aerobic base is improving. |
+| **Cardiac drift** (per session) | Heart rate rise in the second half of a steady flat run vs the first, after warm-up | Under 5% means durable endurance at that duration. |
+
+Internally the model uses heart-rate load (a Banister-style impulse), acute vs chronic load and efficiency factor; the interface and the coach only use the plain terms above.
 
 ## Architecture
 
@@ -51,7 +53,7 @@ tests/             node:test unit tests (metrics, session crypto, agent loop) + 
 
 ## The coach agent
 
-One model call decides for itself what it needs: no router, no forced tool use. The cached system prompt covers current state (load, trends, last ~15 sessions); three tools cover the rest - `list_activities` (any date window), `get_activity_details` (second-by-second zones, splits, laps, decoupling) and `compute_stats` (the same deterministic functions the dashboard uses). The loop is capped at 8 model calls and always ends on a call without tools, so it must produce a written answer. Live Strava calls are budgeted at 6 per question. The visible steps in the chat are built only from the model's `tool_use` blocks, and the reply is streamed as server-sent events.
+One model call decides for itself what it needs: no router, no forced tool use. The cached system prompt covers current state (load, trends, last ~15 sessions); three tools cover the rest - `list_activities` (any date window), `get_activity_details` (second-by-second zones, splits, laps, cardiac drift) and `compute_stats` (the same deterministic functions the dashboard uses: summary, climbing and engine trends, weekly volume). The loop is capped at 8 model calls and always ends on a call without tools, so it must produce a written answer. Live Strava calls are budgeted at 6 per question. The visible steps in the chat are built only from the model's `tool_use` blocks, and the reply is streamed as server-sent events.
 
 ## Design decisions
 
@@ -59,7 +61,7 @@ One model call decides for itself what it needs: no router, no forced tool use. 
 
 **The model is grounded, not trusted with raw input.** The browser sends only the conversation text. The server fetches the athlete's data itself, computes the metrics, and builds the system prompt. A user cannot inject fake training data, and every recommendation must cite a number from that context.
 
-**Private context is owner-only.** Injury history and race plan live in an environment variable and are added to the prompt only when the authenticated Strava athlete id matches `OWNER_ATHLETE_ID`. They are never committed, never sent to the browser.
+**Private context is owner-only.** Injury history and goals live in an environment variable and are added to the prompt only when the authenticated Strava athlete id matches `OWNER_ATHLETE_ID`. They are never committed, never sent to the browser.
 
 **One code path for demo and live.** The demo generator emits Strava-shaped objects, so the same analytics, prompt builder and UI run on both. Recruiters can try the full product without a Strava account, and the demo is a living integration test.
 
@@ -69,7 +71,7 @@ One model call decides for itself what it needs: no router, no forced tool use. 
 
 ## Known limits and next steps
 
-- EF does not use grade-adjusted pace; trail runs with significant D+ are excluded rather than corrected. Next: grade-adjusted speed from altitude streams.
+- The aerobic engine does not use grade-adjusted pace; hilly runs are excluded rather than corrected. Next: grade-adjusted speed from altitude streams.
 - %HRmax zones are a simplification; a lactate or ventilatory threshold test would personalize them.
 - Strava apps start in single-athlete mode; multi-user access requires Strava's app review.
 - A persistent store to track conversations over time.
