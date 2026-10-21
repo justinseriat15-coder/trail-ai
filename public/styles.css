@@ -211,6 +211,19 @@ button { font: inherit; cursor: pointer; }
 .easybar-row b span { font-weight: 400; color: var(--text-3); font-size: 11px; }
 @media (max-width: 560px) { .easybar-row { grid-template-columns: 74px 1fr 90px; } }
 
+.race-gauge { display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: 12px; margin-bottom: 12px; }
+.race-track { position: relative; height: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
+.race-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--brand); border-radius: 99px; transition: width .5s ease; }
+.race-fill.full { background: var(--moss); }
+.race-gauge b { font-variant-numeric: tabular-nums; text-align: right; font-size: 15px; }
+.race-parts { display: grid; gap: 6px; }
+.race-part { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: baseline; font-size: 12px; color: var(--text-2); }
+.race-part .lbl { color: var(--text-3); }
+.race-part b { font-variant-numeric: tabular-nums; }
+.race-part .st-ok { color: var(--moss); }
+.race-part .st-gap { color: var(--ochre, var(--serious)); }
+@media (max-width: 560px) { .race-part { grid-template-columns: 118px 1fr auto; } }
+
 /* ---------- Sessions table ---------- */
 .table-wrap { overflow-x: auto; }
 .runs { width: 100%; border-collapse: collapse; font-size: 12.5px; }

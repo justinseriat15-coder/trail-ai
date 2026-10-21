@@ -90,7 +90,7 @@ test('decoupling readings match the thresholds', () => {
 });
 
 test('every dashboard metric has a plain-language explanation', () => {
-  for (const k of ['week', 'load', 'easy', 'climb', 'engine', 'decoupling', 'zones']) {
+  for (const k of ['week', 'load', 'easy', 'climb', 'engine', 'race', 'decoupling', 'zones']) {
     assert.ok(A.METRIC_INFO[k]?.what?.length > 20, `${k} what`);
     assert.ok(A.METRIC_INFO[k]?.meaning?.length > 20, `${k} meaning`);
   }
@@ -290,4 +290,48 @@ test('demo streams: HR rises into a climb over ~1-2 min, never instantly', () =>
     if (gain > 12) worst = Math.max(worst, s.heartrate[i] - s.heartrate[i - 6]);
   }
   assert.ok(worst <= 10, `HR jumped ${worst} bpm in 30 s on a ramp`);
+});
+
+// ---------- Race readiness ----------
+
+test('race readiness: empty history gives no gauge', () => {
+  const r = A.raceReadiness([], { now: NOW });
+  assert.equal(r.overall, null);
+  assert.match(r.sentence, /Not enough/);
+});
+
+test('race readiness: a fully prepared athlete hits 100', () => {
+  const acts = [];
+  for (let w = 0; w < 12; w++) {
+    const t = new Date(NOW); t.setDate(t.getDate() - w * 7);
+    acts.push({ type: 'Run', start_date_local: t.toISOString(), moving_time: 20000, distance: 55000, total_elevation_gain: 2600, average_heartrate: 150 });
+  }
+  const r = A.raceReadiness(acts, { climbNow: 600, now: NOW });
+  assert.equal(r.parts.distance.pct, 100);
+  assert.equal(r.parts.vertWeek.pct, 100);
+  assert.equal(r.parts.climb.pct, 100);
+  assert.equal(r.overall, 100);
+  assert.match(r.sentence, /All three boxes ticked/);
+});
+
+test('race readiness: shortest long run is named as the gap', () => {
+  const acts = [];
+  for (let w = 0; w < 12; w++) {
+    const t = new Date(NOW); t.setDate(t.getDate() - w * 7);
+    acts.push({ type: 'Run', start_date_local: t.toISOString(), moving_time: 3600, distance: 10000, total_elevation_gain: 2600, average_heartrate: 145 });
+  }
+  const r = A.raceReadiness(acts, { climbNow: 600, now: NOW });
+  assert.equal(r.parts.distance.pct, 20); // 10 km of 50 km
+  assert.match(r.sentence, /long run is the gap/);
+});
+
+test('race demand: 2,500 m inside 50 km at 8 km/h is 400 m/h', () => {
+  assert.equal(A.raceDemandMph(), 400);
+});
+
+test('race readiness works on the demo dataset', () => {
+  const r = A.raceReadiness(demoActivities(), { climbNow: 726, now: new Date('2026-10-20T12:00:00') });
+  assert.ok(r.overall > 0 && r.overall < 100, `overall ${r.overall}`);
+  assert.ok(r.parts.distance.have > 15, `longest ${r.parts.distance.have}`);
+  assert.match(r.sentence, /gap/);
 });
