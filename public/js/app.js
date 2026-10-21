@@ -2,11 +2,59 @@ import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
   weeklyVolume, efTrend, efChange, acwrSeries, acwrStatus, consecutiveRunDays,
   efficiencyFactor, decoupling, timeInZones, streamSeries, zoneBounds,
+  METRIC_INFO, acwrReading, decouplingReading,
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
 const fr = (x) => String(x); // English number format: decimal point
 const state = { mode: null, profile: null, activities: [], selectedId: null, chat: [], charts: {} };
+
+
+// ---------- Metric explanations (info tips with a live "what this means" line) ----------
+const tipRefs = {};
+
+function closeTips(except) {
+  document.querySelectorAll('.tip.open').forEach((t) => { if (t !== except) t.classList.remove('open'); });
+}
+document.addEventListener('click', () => closeTips());
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTips(); });
+
+function makeTip(key) {
+  const info = METRIC_INFO[key];
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'tip';
+  b.setAttribute('aria-label', `About ${info.name}`);
+  const dot = document.createElement('i');
+  dot.textContent = 'i';
+  dot.setAttribute('aria-hidden', 'true');
+  const bub = document.createElement('span');
+  bub.className = 'tip-bubble';
+  bub.setAttribute('role', 'tooltip');
+  const title = document.createElement('b');
+  title.textContent = info.name;
+  const what = document.createElement('span');
+  what.textContent = info.what;
+  const live = document.createElement('em');
+  live.textContent = info.meaning;
+  bub.append(title, what, live);
+  b.append(dot, bub);
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const was = b.classList.contains('open');
+    closeTips();
+    if (!was) b.classList.add('open');
+  });
+  tipRefs[key] = { live };
+  return b;
+}
+
+function attachTips() {
+  document.querySelectorAll('[data-metric]').forEach((el) => {
+    const label = el.querySelector('.kpi-label');
+    if (label) label.appendChild(makeTip(el.dataset.metric));
+  });
+}
 
 // ---------- Theme for charts (reads CSS tokens so there is one source of truth) ----------
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -51,6 +99,7 @@ const bandPlugin = {
 
 // ---------- Boot ----------
 async function boot() {
+  attachTips();
   const params = new URLSearchParams(location.search);
   const auth = params.get('auth');
   const me = await fetch('/api/me').then((r) => r.json()).catch(() => ({ connected: false }));
@@ -119,6 +168,7 @@ function render() {
   const last7 = acts.filter((a) => isRun(a) && parseLocal(a.start_date_local) >= sevenDaysAgo);
   $('k-vol').textContent = `${fr(km(last7.reduce((s, a) => s + a.distance, 0)))} km`;
   $('k-vol-sub').textContent = `${last7.length} session${last7.length > 1 ? 's' : ''} · ${Math.round(last7.reduce((s, a) => s + (a.total_elevation_gain || 0), 0))} m gain`;
+  if (tipRefs.volume) tipRefs.volume.live.textContent = `Right now: ${fr(km(last7.reduce((s, a) => s + a.distance, 0)))} km in ${last7.length} session${last7.length > 1 ? 's' : ''} this week.`;
 
   const acwr = acwrSeries(acts, hrMax, hrRest, 56);
   const now = acwr[acwr.length - 1];
@@ -126,17 +176,24 @@ function render() {
   $('k-acwr').textContent = now?.ratio != null ? now.ratio.toFixed(2) : '—';
   $('k-acwr-sub').textContent = st.label;
   $('k-acwr-sub').className = `kpi-sub status ${st.level}`;
+  if (tipRefs.acwr) tipRefs.acwr.live.textContent = `Right now: ${now?.ratio != null ? now.ratio.toFixed(2) : 'n/a'} - ${acwrReading(now?.ratio)}`;
 
   const trend = efTrend(acts, hrMax);
   const chg = efChange(trend);
   $('k-ef').textContent = trend.length ? trend.at(-1).rolling.toFixed(2) : '—';
   $('k-ef-sub').textContent = chg == null ? 'not enough flat easy runs' : `${chg > 0 ? '+' : ''}${chg}% over the period`;
+  if (tipRefs.ef) {
+    tipRefs.ef.live.textContent = chg == null
+      ? 'Not enough comparable runs yet: the trend needs a few flat, easy outings of 20 minutes or more.'
+      : `Right now: ${chg > 0 ? '+' : ''}${chg}% over the period. ${chg >= 3 ? 'Your aerobic base is improving.' : chg <= -3 ? 'Efficiency is slipping: check sleep, illness and recent load.' : 'Your aerobic base is holding steady.'}`;
+  }
 
   const consec = consecutiveRunDays(acts);
   $('k-consec').textContent = consec;
   const consecSub = $('k-consec-sub');
   consecSub.textContent = consec >= 3 ? 'max in 14 d · high density' : 'max in 14 d';
   consecSub.className = consec >= 3 ? 'kpi-sub status serious' : 'kpi-sub';
+  if (tipRefs.consec) tipRefs.consec.live.textContent = consec >= 3 ? 'Right now: three or more days in a row. Keep today very easy or take a rest day.' : 'Right now: no dense streak. Alternating run and rest days keeps fatigue low.';
 
   // Weekly volume
   const label = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -258,16 +315,24 @@ function setStats(a, streams) {
     [`${paceStr(a.average_speed)}/km`, 'average pace'],
     [a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm` : '—', 'average HR'],
     [`${Math.round(a.total_elevation_gain || 0)} m`, 'elevation gain'],
-    [dec == null ? (streams ? 'n/a' : '…') : `${dec}%`, 'Pa:HR decoupling'],
+    [dec == null ? (streams ? 'n/a' : '…') : `${dec}%`, 'Pa:HR decoupling', 'decoupling'],
   ];
   const box = $('d-stats');
-  box.replaceChildren(...items.map(([v, l]) => {
+  const cells = items.map(([v, l, metric]) => {
     const d = document.createElement('div');
     const b = document.createElement('b'); b.textContent = v;
     const s = document.createElement('span'); s.textContent = l;
+    if (metric) s.appendChild(makeTip(metric));
     d.append(b, s);
     return d;
-  }));
+  });
+  if (streams) {
+    const note = document.createElement('p');
+    note.className = 'stat-note';
+    note.textContent = decouplingReading(dec);
+    cells.push(note);
+  }
+  box.replaceChildren(...cells);
 }
 
 function renderZones(streams) {
@@ -290,7 +355,10 @@ function renderZones(streams) {
     item.append(`Z${i + 1} ${bounds[i].min}-${bounds[i].max} · ${x.pct}%`);
     legend.appendChild(item);
   });
-  box.replaceChildren(bar, legend);
+  const note = document.createElement('p');
+  note.className = 'stat-note';
+  note.textContent = `${METRIC_INFO.zones.what} ${METRIC_INFO.zones.meaning}`;
+  box.replaceChildren(bar, legend, note);
 }
 
 function renderStreamCharts(streams) {

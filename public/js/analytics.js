@@ -246,3 +246,56 @@ export function buildSummary(activities, { hrMax, hrRest, now = new Date() }) {
     })),
   };
 }
+
+// ---------- Metric explanations (dashboard tooltips and readings) ----------
+// Pure data + pure functions so they are unit-testable and shared with the server.
+export const METRIC_INFO = {
+  volume: {
+    name: '7-day volume',
+    what: 'Total distance run over the last 7 days, all run types.',
+    meaning: 'Watch for sudden jumps versus your usual week: they are what pushes the ACWR load ratio up.',
+  },
+  acwr: {
+    name: 'ACWR (acute:chronic workload ratio)',
+    what: 'Your 7-day training load divided by your average weekly load over the last 28 days (Banister TRIMP).',
+    meaning: '0.8 to 1.3 is the sweet spot. Above 1.5, load is rising much faster than your base and injury risk climbs.',
+  },
+  ef: {
+    name: 'Efficiency Factor (EF)',
+    what: 'Speed per heartbeat (metres per minute per bpm) on flat, easy runs of 20 minutes or more.',
+    meaning: 'If the rolling line climbs over weeks, your aerobic base is improving. Hilly runs and intervals are excluded so the comparison stays fair.',
+  },
+  consec: {
+    name: 'Consecutive days',
+    what: 'The longest streak of back-to-back running days in the last 14 days.',
+    meaning: 'Three or more days in a row raises fatigue density. Most plans alternate hard and easy days.',
+  },
+  decoupling: {
+    name: 'Cardiac decoupling (Pa:HR)',
+    what: 'How much your heart rate drifts upward at a steady effort, comparing the second half of the session with the first (after a 10-minute warm-up).',
+    meaning: 'Under 5% means good aerobic durability for that duration. Higher means the aerobic base is still developing for that distance.',
+  },
+  zones: {
+    name: 'Heart-rate zones',
+    what: 'Time spent in each of 5 zones, set as a percentage of your max heart rate.',
+    meaning: 'Easy days should sit mostly in Z1-Z2. An "easy" run with a lot of Z3 or above was not actually easy.',
+  },
+};
+
+// One-line "what this means for you" reading of the current ACWR ratio.
+export function acwrReading(r) {
+  if (r == null) return 'Not enough history yet: the ratio needs about 4 weeks of training data.';
+  if (r < 0.8) return 'Load is below what your body is used to. Fine for a deload week, not for building fitness.';
+  if (r <= 1.3) return 'Load matches what your body is adapted to. This is the zone to train in.';
+  if (r <= 1.5) return 'Load is rising faster than your 4-week average. Hold volume steady this week.';
+  return 'Load is rising fast relative to your base. Ease off: cut volume or intensity this week.';
+}
+
+// One-line reading of a Pa:HR decoupling value, in percent.
+export function decouplingReading(d) {
+  if (d == null) return 'Not enough steady heart-rate data to measure drift for this session.';
+  if (d < 3.5) return 'Excellent aerobic durability for this duration.';
+  if (d < 5) return 'Good aerobic durability for this duration.';
+  if (d < 7) return 'Noticeable cardiac drift: the aerobic base is still developing, so keep long runs easy.';
+  return 'Strong cardiac drift: slow down or shorten steady efforts until this comes back under 5%.';
+}

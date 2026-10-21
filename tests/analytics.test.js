@@ -72,3 +72,26 @@ test('time in zones sums to ~100 %', () => {
 test('Strava local dates are not shifted by timezone', () => {
   assert.equal(A.parseLocal('2026-10-07T07:30:00Z').getHours(), 7);
 });
+
+test('ACWR readings match the load zones', () => {
+  assert.match(A.acwrReading(null), /Not enough history/);
+  assert.match(A.acwrReading(0.7), /deload/);
+  assert.match(A.acwrReading(1.08), /zone to train in/);
+  assert.match(A.acwrReading(1.4), /Hold volume steady/);
+  assert.match(A.acwrReading(1.6), /Ease off/);
+});
+
+test('decoupling readings match the thresholds', () => {
+  assert.match(A.decouplingReading(null), /Not enough/);
+  assert.match(A.decouplingReading(3.1), /Excellent/);
+  assert.match(A.decouplingReading(4.2), /Good/);
+  assert.match(A.decouplingReading(6), /Noticeable/);
+  assert.match(A.decouplingReading(9), /Strong/);
+});
+
+test('every dashboard metric has a plain-language explanation', () => {
+  for (const k of ['volume', 'acwr', 'ef', 'consec', 'decoupling', 'zones']) {
+    assert.ok(A.METRIC_INFO[k]?.what?.length > 20, `${k} what`);
+    assert.ok(A.METRIC_INFO[k]?.meaning?.length > 20, `${k} meaning`);
+  }
+});
