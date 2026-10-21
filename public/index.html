@@ -66,13 +66,40 @@
     <p class="preview-note">An example with the demo athlete. Every number the coach quotes comes from the computed metrics.</p>
   </section>
 
-  <section class="steps">
-    <h2>How it works</h2>
-    <ol>
-      <li><b>Connect Strava</b><p>Sign in once. Your Strava tokens stay encrypted on the server and never reach the browser.</p></li>
-      <li><b>Your runs become numbers</b><p>Each session feeds five answers: today’s verdict, load vs usual, easy share, climbing speed and your aerobic engine.</p></li>
-      <li><b>Ask the coach</b><p>Describe a session in your own words. The coach finds it and answers with your numbers, not generic advice.</p></li>
-    </ol>
+  <section class="steps" id="how-it-works">
+    <div class="steps-track" id="steps-track">
+      <div class="steps-stage">
+        <h2>How it works</h2>
+        <ol class="steps-rail">
+          <li class="sr-1"><b>Your run</b><span>raw Strava data</span></li>
+          <li class="sr-2"><b>Your metrics</b><span>computed on it</span></li>
+          <li class="sr-3"><b>The coach</b><span>answers with numbers</span></li>
+        </ol>
+        <div class="steps-scene">
+          <article class="st-card" aria-label="Example run from Strava">
+            <span class="st-date">Sun 12 Oct · 8:04</span>
+            <b class="st-name">Summit out-and-back</b>
+            <span class="st-nums">20.4 km · 7:12/km · 152 bpm · 929 m D+</span>
+          </article>
+          <div class="st-metrics">
+            <svg class="st-profile" viewBox="0 0 300 76" aria-hidden="true">
+              <path class="st-pf-base" d="M0,62 L20,58 L40,60 L60,52 L80,54 L100,44 L120,34 L140,18 L160,12 L180,20 L200,34 L220,44 L240,50 L260,54 L280,58 L300,60" />
+              <path class="st-pf-climb" d="M100,44 L120,34 L140,18 L160,12" />
+              <circle class="st-pf-dot" cx="160" cy="12" r="3" />
+            </svg>
+            <div class="st-chiprow">
+              <span class="st-chip">Climb · 2.1 km at 618 m/h</span>
+              <span class="st-chip">Easy share</span>
+            </div>
+            <div class="st-easy"><i></i></div>
+            <span class="st-easy-label">64% of running genuinely easy · target ~80%</span>
+          </div>
+          <div class="st-coach">
+            <p>That Sunday run is still in your legs: <strong>20.4 km</strong> with <strong>929 m</strong> of climbing. Load is <strong>+33%</strong> vs your usual and only <strong>64%</strong> of your running is easy. Today stays short and easy - the intervals move to Friday.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="features">

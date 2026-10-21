@@ -119,7 +119,7 @@ function heroDraw() {
 // Other landing sections: one subtle fade/slide the first time they appear.
 function sectionReveals() {
   if (reducedMotion() || !('IntersectionObserver' in window)) return;
-  const els = document.querySelectorAll('#landing .preview, #landing .steps, #landing .features, #landing .arch');
+  const els = document.querySelectorAll('#landing .preview, #landing .features, #landing .arch');
   if (!els.length) return;
   els.forEach((el) => el.classList.add('reveal'));
   const io = new IntersectionObserver((entries) => {
@@ -132,3 +132,34 @@ function sectionReveals() {
 
 heroDraw();
 sectionReveals();
+
+// "How it works": scroll-driven sticky story. Where CSS animation-timeline is
+// supported the keyframes in styles.css do everything and no JS runs. Elsewhere
+// (older Safari, Firefox) a passive scroll listener maps track progress to the
+// three step classes. Native scroll speed always; nothing is hijacked.
+// ?sda=off forces the JS fallback for testing the no-support path.
+function stepsStory() {
+  const section = document.querySelector('.steps');
+  const track = document.getElementById('steps-track');
+  if (!section || !track || reducedMotion()) return;
+  const forceFallback = new URLSearchParams(location.search).get('sda') === 'off';
+  if (!forceFallback && CSS.supports('animation-timeline: view()')) return;
+  section.classList.add('jsfb');
+  let tick = false;
+  const update = () => {
+    tick = false;
+    const r = track.getBoundingClientRect();
+    const total = r.height - innerHeight;
+    const p = total > 0 ? Math.min(1, Math.max(0, -r.top / total)) : 1;
+    const step = p < 0.34 ? 1 : p < 0.67 ? 2 : 3;
+    section.classList.toggle('st-1', step === 1);
+    section.classList.toggle('st-2', step === 2);
+    section.classList.toggle('st-3', step === 3);
+  };
+  const onScroll = () => { if (!tick) { tick = true; requestAnimationFrame(update); } };
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', onScroll);
+  update();
+}
+
+stepsStory();
