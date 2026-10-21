@@ -206,6 +206,9 @@ button { font: inherit; cursor: pointer; }
 .msg ul { padding-left: 18px; margin: 4px 0; }
 .msg p + p, .msg p + ul, .msg ul + p { margin-top: 6px; }
 @keyframes up { from { opacity: 0; transform: translateY(6px); } }
+.msg.agent-steps { background: none; border: none; padding: 0 2px; font-size: 12px; color: var(--text-3); display: grid; gap: 3px; }
+.msg.agent-steps div::before { content: "\2192"; margin-right: 6px; color: var(--brand); }
+.msg.agent-steps.done div::before { content: "\2713"; }
 .typing { display: flex; gap: 4px; padding: 14px; }
 .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); animation: bounce 1.2s infinite; }
 .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }

@@ -1,8 +1,13 @@
 // POST /api/chat { source, messages:[{role,content}], activityId? } → coach reply.
 // The model only ever sees data the server fetched itself.
+// Agent loop: one call decides whether to use the three data tools (lib/agent.js).
+// Clients that send Accept: text/event-stream get the visible steps as SSE events
+// while the agent works, then the reply as the final event; others get plain JSON.
+import Anthropic from '@anthropic-ai/sdk';
 import { handler, json, readJson, clientIp } from '../lib/http.js';
 import { loadAthlete, loadStreams } from '../lib/data.js';
 import { buildSystemPrompt } from '../lib/coach.js';
+import { runCoachAgent } from '../lib/agent.js';
 import { rateLimit } from '../lib/ratelimit.js';
 
 const MAX_TURNS = 12;
@@ -47,26 +52,28 @@ export default handler(['POST'], async (req, res) => {
     ? process.env.ANTHROPIC_DEMO_MODEL || 'claude-haiku-4-5-20251001'
     : process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 700,
-      // The system prompt is identical across turns of a conversation → cache it.
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-      messages: messages.map(({ role, content }) => ({ role, content })),
-    }),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.error('Anthropic error', r.status, data?.error?.type);
-    return json(res, 502, { error: 'The AI coach is currently unavailable.' });
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  if ((req.headers.accept || '').includes('text/event-stream')) {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    try {
+      const out = await runCoachAgent({ client, model, system, messages, ctx, onStep: (label) => send({ type: 'step', label }) });
+      send({ type: 'reply', text: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
+    } catch (e) {
+      console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
+      send({ type: 'error', error: 'The AI coach is currently unavailable.' });
+    }
+    return res.end();
   }
-  const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
-  json(res, 200, { reply: text, model, usage: data.usage });
+
+  try {
+    const out = await runCoachAgent({ client, model, system, messages, ctx });
+    json(res, 200, { reply: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
+  } catch (e) {
+    console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
+    json(res, 502, { error: 'The AI coach is currently unavailable.' });
+  }
 });
