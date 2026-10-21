@@ -14,6 +14,13 @@ function mulberry32(seed) {
   };
 }
 
+// Session name pools, so weeks do not read as copy-paste.
+const NAMES = {
+  easy: ['Easy run Z2', 'Recovery jog', 'Easy loop', 'Shakeout run', 'Easy run Z2', 'Morning miles'],
+  intervals: ['Threshold 3×10 min', 'Intervals 6×3 min', 'Hill reps 8×45 s', 'Tempo 20 min', 'Threshold 2×15 min'],
+  long: ['Long trail run', 'Ridge loop', 'Long run - forest trails', 'Summit out-and-back', 'Long trail run'],
+};
+
 // Weekly template (0 = Monday). Never two running days in a row except the weekend block.
 const TEMPLATE = [
   { dow: 1, kind: 'easy' },
@@ -48,17 +55,17 @@ export function demoActivities(now = new Date()) {
         minutes = (42 + 18 * progress) * load + rand() * 6;
         hr = 143 + rand() * 6;
         dplus = 20 + rand() * 60;
-        name = 'Easy run Z2';
+        name = NAMES.easy[Math.floor(rand() * NAMES.easy.length)];
       } else if (s.kind === 'intervals') {
         minutes = (45 + 10 * progress) * load;
         hr = 158 + rand() * 6;
         dplus = 30 + rand() * 40;
-        name = progress < 0.5 ? 'Intervals 6×3 min' : 'Threshold 3×10 min';
+        name = NAMES.intervals[Math.floor(rand() * NAMES.intervals.length)];
       } else {
         minutes = (65 + 70 * progress) * load + rand() * 10;
         hr = 146 + rand() * 7;
         dplus = (250 + 650 * progress) * load + rand() * 80;
-        name = 'Long trail run';
+        name = NAMES.long[Math.floor(rand() * NAMES.long.length)];
       }
       const climbPenalty = Math.min(dplus / (minutes / 6) / 60, 0.12); // hills slow you down
       const ef = efBase * (s.kind === 'intervals' ? 1.06 : 1) * (1 - climbPenalty) * (0.97 + rand() * 0.06);
@@ -90,13 +97,104 @@ function toLocalIso(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00Z`;
 }
 
-// Synthetic 5-second streams with realistic cardiac drift and terrain noise.
+// Synthetic 5-second streams. Terrain is generated first and rescaled so the
+// accumulated ascent matches the activity's D+; pace and HR then respond to
+// the actual grade with a first-order lag, plus realistic noise and drift.
 export function demoStreams(activity) {
   const rand = mulberry32(activity.id);
   const N = Math.floor(activity.moving_time / 5);
   const time = [], heartrate = [], velocity_smooth = [], distance = [], altitude = [];
-  let dist = 0, alt = 20, hr = 105;
+  const dplus = activity.total_elevation_gain || 0;
+
+  // Pass 1: terrain. The profile must agree with the session name: an
+  // out-and-back has ONE summit, a loop has 1-3 climbs and comes home low.
+  const outback = /out-and-back/i.test(activity.name || '');
+  const raw = new Array(N).fill(20);
+  if (dplus > 0 && outback) {
+    const summit = Math.floor(N * (0.5 + rand() * 0.12));
+    const knee = Math.floor(summit * (0.3 + rand() * 0.2));
+    const knots = [
+      [0, 0],
+      [knee, dplus * (0.28 + rand() * 0.15)],
+      [Math.floor(summit * 0.8), dplus * (0.7 + rand() * 0.12)],
+      [summit, dplus],
+      [summit + Math.max(2, Math.floor(N * 0.02)), dplus * (0.93 + rand() * 0.04)],
+      [Math.floor(summit + (N - summit) * 0.5), dplus * (0.4 + rand() * 0.1)],
+      [N - 1, dplus * (0.02 + rand() * 0.05)],
+    ];
+    for (let i = 0; i < N; i++) {
+      let s0 = knots[0], s1 = knots[knots.length - 1];
+      for (let kI = 0; kI < knots.length - 1; kI++) {
+        if (i >= knots[kI][0] && i <= knots[kI + 1][0]) { s0 = knots[kI]; s1 = knots[kI + 1]; break; }
+      }
+      const span = Math.max(1, s1[0] - s0[0]);
+      raw[i] = 20 + s0[1] + ((s1[1] - s0[1]) * (i - s0[0])) / span
+        + (i <= summit
+            ? Math.sin((i / Math.max(30, summit)) * Math.PI * 5 + 0.9) * dplus * 0.045
+            : Math.sin(i / 41 + 0.3) * dplus * 0.012)
+        + Math.sin(i / 23 + 1.7) * 1.4 + Math.sin(i / 7 + 0.4) * 0.6 + (rand() - 0.5) * 0.7;
+    }
+  } else if (dplus > 0) {
+    const isLoop = /loop/i.test(activity.name || '');
+    const nMaj = dplus > 600 ? 2 + Math.floor(rand() * 2) : dplus > 150 ? 1 + Math.floor(rand() * 2) : 1;
+    const shares = Array.from({ length: nMaj }, () => 0.6 + rand() * 0.8);
+    const totShare = shares.reduce((x, y) => x + y, 0);
+    const knots = [[0, 0]];
+    let alt = 0, pos = 0;
+    for (let m = 0; m < nMaj; m++) {
+      // Loops reserve the last stretch to come back down to the start.
+      const blockLen = Math.floor((N / nMaj) * (0.8 + rand() * 0.4) * (isLoop ? 0.82 : 1));
+      const climbLen = Math.max(24, Math.floor(blockLen * (0.45 + rand() * 0.2)));
+      const share = dplus * (shares[m] / totShare);
+      const k1 = pos + Math.floor(climbLen * (0.3 + rand() * 0.3));
+      const k2 = pos + climbLen;
+      knots.push([k1, alt + share * (0.3 + rand() * 0.4)], [k2, alt + share]);
+      alt += share;
+      const drop = share * (0.7 + rand() * 0.3);
+      const dLen = Math.max(1, blockLen - climbLen);
+      const d1 = k2 + Math.floor(dLen * (0.4 + rand() * 0.3));
+      knots.push([d1, alt - drop * 0.6], [pos + blockLen, alt - drop]);
+      alt -= drop;
+      pos += blockLen;
+    }
+    if (isLoop) {
+      knots.push([Math.min(pos, N - 3), alt], [N - 1, dplus * 0.02 * rand()]);
+    } else {
+      knots.push([N - 1, alt]);
+    }
+    for (let i = 0; i < N; i++) {
+      let s0 = knots[0], s1 = knots[knots.length - 1];
+      for (let kI = 0; kI < knots.length - 1; kI++) {
+        if (i >= knots[kI][0] && i <= knots[kI + 1][0]) { s0 = knots[kI]; s1 = knots[kI + 1]; break; }
+      }
+      const span = Math.max(1, s1[0] - s0[0]);
+      raw[i] = 20 + s0[1] + ((s1[1] - s0[1]) * (i - s0[0])) / span
+        + Math.sin((i / N) * Math.PI * 6 + 1.2) * dplus * 0.03
+        + Math.sin(i / 23 + 1.7) * 2.2 + Math.sin(i / 7 + 0.4) * 0.8 + (rand() - 0.5) * 0.8;
+    }
+  }
+  let rawAsc = 0;
+  for (let i = 1; i < N; i++) rawAsc += Math.max(0, raw[i] - raw[i - 1]);
+  const k = rawAsc > 0 && dplus > 0 ? dplus / rawAsc : 0;
+  const base = Math.min(...raw);
+  for (let i = 0; i < N; i++) altitude.push(+((raw[i] - base) * k + 20).toFixed(1));
+
+  // Pass 2: pace and HR against the real grade of that terrain.
+  // Grade is smoothed over ~30 s; pace follows it quickly, HR follows slowly
+  // (real HR rises over 1-2 min into a climb, falls faster on the way down).
+  // Steep ground means hiking: no artificial pace floor.
   const isInt = activity._kind === 'intervals';
+  const SG = 6; // 6 samples * 5 s = 30 s smoothing
+  const smGrade = (i) => {
+    let acc = 0, n = 0;
+    for (let j = Math.max(1, i - SG + 1); j <= i; j++) {
+      const step = Math.max(1, (j * 5 * activity.average_speed) - ((j - 1) * 5 * activity.average_speed));
+      acc += (altitude[j] - altitude[j - 1]) / step; n++;
+    }
+    return n ? acc / n : 0;
+  };
+  let dist = 0, hr = 105;
+  const vRaw = [];
   for (let i = 0; i < N; i++) {
     const t = i * 5;
     const frac = i / N;
@@ -108,12 +206,27 @@ export function demoStreams(activity) {
       targetHr *= on ? 1.08 : 0.93;
     }
     if (t < 600) { targetV *= 0.9; targetHr *= 0.9 + 0.1 * (t / 600); }
-    const grade = Math.sin(i / 37) * (activity.total_elevation_gain / (activity.distance / 1000)) / 400;
-    const v = Math.max(0.8, targetV * (1 - grade * 4) * (0.97 + rand() * 0.06));
-    hr += (targetHr * (1 + grade * 1.5) - hr) * 0.08 + (rand() - 0.5) * 1.5;
-    dist += v * 5; alt = Math.max(0, alt + grade * v * 5);
-    time.push(t); heartrate.push(Math.round(hr)); velocity_smooth.push(+v.toFixed(2));
-    distance.push(Math.round(dist)); altitude.push(+alt.toFixed(1));
+    const g = Math.max(-0.25, Math.min(0.25, smGrade(i)));
+    const floor = g > 0.12 ? 0.45 : 0.8; // hiking on steep ground
+    const v = Math.max(floor, targetV * (1 - g * 3.2) * (0.97 + rand() * 0.06));
+    const hrTarget = Math.min(targetHr * (1 + g * 1.1), DEMO_PROFILE.hrMax - 2);
+    const rate = hrTarget > hr ? 0.045 : 0.12; // rise ~110 s, fall ~40 s
+    hr += (hrTarget - hr) * rate + (rand() - 0.5) * 1.2;
+    hr = Math.min(hr, DEMO_PROFILE.hrMax - 2); // never above the athlete's own max
+    dist += v * 5;
+    vRaw.push(v);
+    time.push(t); heartrate.push(Math.round(hr));
+    distance.push(dist);
   }
+  // Smooth pace over a rolling ~30 s window (what a watch shows), then
+  // rescale distance so the stream ends EXACTLY on the declared distance.
+  const scale = activity.distance / dist;
+  for (let i = 0; i < N; i++) {
+    let acc = 0, n = 0;
+    for (let j = Math.max(0, i - SG + 1); j <= i; j++) { acc += vRaw[j]; n++; }
+    velocity_smooth.push(+(Math.max(0.4, (acc / n) * scale)).toFixed(2));
+    distance[i] = Math.round(distance[i] * scale);
+  }
+  distance[N - 1] = activity.distance;
   return { time, heartrate, velocity_smooth, distance, altitude };
 }

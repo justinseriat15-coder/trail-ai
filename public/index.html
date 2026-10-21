@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Trail.AI — Endurance analytics</title>
-<meta name="description" content="Trail running training analytics on Strava data: aerobic efficiency, training load (ACWR), cardiac decoupling, and an AI coach grounded in those metrics.">
+<meta name="description" content="Trail running training analytics on Strava data: load vs usual, easy share, climbing speed, aerobic engine, and an AI coach grounded in those numbers.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a19'/%3E%3Cpath d='M5 24 L13 10 L18 18 L21 14 L27 24 Z' fill='%23ff5a1f'/%3E%3C/svg%3E">
 </head>
@@ -42,24 +42,24 @@
       </svg>
       <div class="pf-mark climb" style="left:32%;top:45%"><b>Z2 on the climb</b><span>152 bpm average</span></div>
       <div class="pf-mark" style="left:62%;top:17%"><b>Summit</b><span>km 13.1, 1,240 m</span></div>
-      <div class="pf-mark end" style="left:99.3%;top:88%"><b>Decoupling 3.1%</b><span>steady to the finish</span></div>
+      <div class="pf-mark end" style="left:99.3%;top:88%"><b>Home straight</b><span>20.4 km, 929 m D+</span></div>
     </figure>
   </section>
 
   <section class="preview" aria-label="What the dashboard looks like">
     <div class="preview-frame">
       <div class="pv-kpis">
-        <div><span>7-day volume</span><b>48.2 km</b><em>4 sessions, 1,041 m gain</em></div>
-        <div><span>ACWR</span><b>1.08</b><em class="ok">Optimal zone</em></div>
-        <div><span>Aerobic efficiency</span><b>1.07</b><em>+8.8% over 16 weeks</em></div>
-        <div><span>Consecutive days</span><b>2</b><em>max in 14 days</em></div>
+        <div><span>Last 7 days</span><b id="pv-vol">46.1 km</b><em id="pv-vol-sub">4 sessions, 1,063 m gain</em></div>
+        <div><span>Load vs usual</span><b id="pv-load">+33%</b><em class="ok" id="pv-load-sub">ease off</em></div>
+        <div><span>Aerobic engine</span><b id="pv-engine">6:35/km</b><em id="pv-engine-sub">at 145 bpm · improving</em></div>
+        <div><span>This week</span><b id="pv-week">0.7 h</b><em id="pv-week-sub">49 m of climbing so far</em></div>
       </div>
       <div class="pv-chat">
         <p class="pv-user">Heavy legs yesterday, felt off.</p>
         <div class="pv-coach">
-          <p>That was Tuesday’s <strong>Easy run Z2</strong>: 7.3 km at 6:26/km, HR 145. Your efficiency (EF 1.07) is in line with your trend, so this isn’t a fitness problem.</p>
-          <p>More likely it’s Sunday’s <strong>Long trail run</strong> still in your legs: 897 m of climbing, TRIMP 216. Your ACWR is 1.08, so the overall load is safe.</p>
-          <p>Keep Thursday easy and move the intervals to Friday.</p>
+          <p>That was Tuesday’s <strong>Easy loop</strong>: 6.8 km at 6:39/km, HR 146. The session itself was fine.</p>
+          <p>More likely it’s Sunday’s <strong>Summit out-and-back</strong> still in your legs: 20.4 km with 929 m of climbing. Your load is <b id="pvc-load">+33%</b> vs your usual, above the range to build in, and only <b id="pvc-easy">64%</b> of your running is genuinely easy.</p>
+          <p>Today is an easy day. Keep it short, and move the intervals to Friday.</p>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
     <h2>How it works</h2>
     <ol>
       <li><b>Connect Strava</b><p>Sign in once. Your Strava tokens stay encrypted on the server and never reach the browser.</p></li>
-      <li><b>Your runs become metrics</b><p>Each session is turned into training load, aerobic efficiency, cardiac drift and time in heart-rate zones.</p></li>
+      <li><b>Your runs become numbers</b><p>Each session feeds five answers: today’s verdict, load vs usual, easy share, climbing speed and your aerobic engine.</p></li>
       <li><b>Ask the coach</b><p>Describe a session in your own words. The coach finds it and answers with your numbers, not generic advice.</p></li>
     </ol>
   </section>
@@ -80,18 +80,18 @@
     <div class="feat-grid">
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><polyline class="v-soft" points="6,44 22,40 38,42 54,34 70,36 86,28 102,30 118,22 134,20 152,14"/><g class="v-dots"><circle cx="6" cy="46" r="2.5"/><circle cx="22" cy="38" r="2.5"/><circle cx="38" cy="44" r="2.5"/><circle cx="54" cy="32" r="2.5"/><circle cx="70" cy="38" r="2.5"/><circle cx="86" cy="26" r="2.5"/><circle cx="102" cy="32" r="2.5"/><circle cx="118" cy="20" r="2.5"/><circle cx="134" cy="22" r="2.5"/><circle cx="152" cy="12" r="2.5"/></g></svg>
-        <h3>Aerobic efficiency</h3>
-        <p>Efficiency Factor (metres per minute per heartbeat) on comparable flat easy runs. It shows whether your base endurance is improving, whatever the day’s pace.</p>
+        <h3>Load vs usual</h3>
+        <p>Your last 7 days of training load against the average of the 4 weeks before them. It flags sudden jumps, the most common way trail runners get hurt.</p>
       </article>
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><rect class="v-band" x="0" y="18" width="160" height="18"/><polyline class="v-line" points="0,40 20,34 40,30 60,26 80,28 100,22 120,12 140,8 160,14"/></svg>
-        <h3>Load and risk</h3>
-        <p>Banister TRIMP and the acute:chronic workload ratio (ACWR). It flags sudden jumps in load, the most common cause of overuse injuries.</p>
+        <h3>Climbing speed</h3>
+        <p>Vertical metres per hour on sustained climbs, detected from your own altitude stream. The trail-specific fitness number.</p>
       </article>
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><polyline class="v-soft" points="0,30 160,30"/><polyline class="v-line" points="0,40 30,37 60,34 90,30 120,27 160,22"/></svg>
-        <h3>Cardiac decoupling</h3>
-        <p>Second-by-second analysis of how your heart rate drifts at a steady pace, plus time spent in each zone, from Strava streams.</p>
+        <h3>Easy share and engine</h3>
+        <p>How much of your running is genuinely easy (Z1-Z2), and your pace at your easy heart rate on flat runs - whether the base is improving.</p>
       </article>
       <article>
         <svg viewBox="0 0 160 56" aria-hidden="true"><rect class="v-bubble" x="2" y="8" width="118" height="30" rx="8"/><rect class="v-text" x="12" y="17" width="80" height="4" rx="2"/><rect class="v-text" x="12" y="26" width="56" height="4" rx="2"/><rect class="v-bubble me" x="96" y="40" width="62" height="14" rx="7"/></svg>
@@ -119,17 +119,22 @@
 
   <div class="grid">
     <section class="col-data">
-      <header class="app-head">
-        <svg class="topo app-topo" viewBox="700 -100 700 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M3 11.5 21 3l-8.5 18-2-7.5z"/><path d="M506,330 L488,348 L472,363 L459,378 L450,393 L446,409 L442,428 L437,448 L428,469 L414,487 L394,502 L370,513 L343,518 L315,520 L287,520 L260,518 L234,515 L208,511 L183,505 L160,497 L138,486 L121,471 L109,454 L101,436 L95,419 L90,403 L83,388 L71,375 L54,362 L33,348 L11,330 L-8,309 L-20,286 L-22,262 L-14,240 L4,220 L29,206 L59,196 L89,189 L117,184 L143,180 L167,176 L190,171 L213,167 L236,164 L260,164 L283,166 L306,171 L327,177 L348,184 L370,189 L393,195 L418,200 L446,206 L473,215 L498,228 L517,245 L527,266 L528,288 L520,310 L506,330Z"/></svg>
-        <h1 id="app-title">Your training, <span>read like a coach.</span></h1>
-        <p class="app-sub" id="app-sub"></p>
+      <header class="today" aria-label="Today's coaching verdict">
+        <div class="today-main">
+          <span class="today-chip good" id="t-chip">Train</span>
+          <p class="today-sentence" id="t-sentence"></p>
+        </div>
+        <div class="today-nums" id="t-nums"></div>
       </header>
+      <p class="app-sub" id="app-sub"></p>
       <div class="skel-wrap" id="loading" aria-hidden="true">
+        <div class="card skel skel-today"></div>
         <div class="kpis">
           <div class="kpi skel"><i style="width:40%"></i><b style="width:65%"></b><i style="width:55%"></i></div>
           <div class="kpi skel"><i style="width:35%"></i><b style="width:50%"></b><i style="width:70%"></i></div>
           <div class="kpi skel"><i style="width:55%"></i><b style="width:45%"></b><i style="width:60%"></i></div>
           <div class="kpi skel"><i style="width:45%"></i><b style="width:40%"></b><i style="width:50%"></i></div>
+          <div class="kpi skel"><i style="width:50%"></i><b style="width:60%"></b><i style="width:45%"></i></div>
         </div>
         <div class="card skel skel-chart"></div>
         <div class="two">
@@ -141,44 +146,55 @@
       <div id="data" hidden>
 
         <div class="kpis">
-          <div class="kpi" data-metric="volume"><div class="kpi-label">7-day volume</div><div class="kpi-value" id="k-vol">—</div><div class="kpi-sub" id="k-vol-sub"></div></div>
-          <div class="kpi" data-metric="acwr"><div class="kpi-label">ACWR</div><div class="kpi-value" id="k-acwr">—</div><div class="kpi-sub status" id="k-acwr-sub"></div></div>
-          <div class="kpi" data-metric="ef"><div class="kpi-label">Aerobic efficiency</div><div class="kpi-value" id="k-ef">—</div><div class="kpi-sub" id="k-ef-sub"></div></div>
-          <div class="kpi" data-metric="consec"><div class="kpi-label">Consecutive days</div><div class="kpi-value" id="k-consec">—</div><div class="kpi-sub" id="k-consec-sub">max in 14 d</div></div>
+          <div class="kpi" data-metric="week"><div class="kpi-label">Last 7 days</div><div class="kpi-value" id="k-week">—</div><div class="kpi-sub" id="k-week-sub"></div></div>
+          <div class="kpi" data-metric="load"><div class="kpi-label">Load vs usual</div><div class="kpi-value" id="k-load">—</div><div class="kpi-sub status" id="k-load-sub"></div></div>
+          <div class="kpi" data-metric="easy"><div class="kpi-label">Easy share</div><div class="kpi-value" id="k-easy">—</div><div class="kpi-sub" id="k-easy-sub"></div></div>
+          <div class="kpi" data-metric="climb"><div class="kpi-label">Climbing speed</div><div class="kpi-value" id="k-climb">—</div><div class="kpi-sub" id="k-climb-sub"></div></div>
+          <div class="kpi" data-metric="engine"><div class="kpi-label">Aerobic engine</div><div class="kpi-value" id="k-engine">—</div><div class="kpi-sub" id="k-engine-sub"></div></div>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Weekly volume</h2><span class="card-note">running km · 12 weeks</span></div>
-          <div class="chart-box"><canvas id="c-volume" aria-label="Weekly volume in kilometres"></canvas></div>
+          <div class="card-head"><h2>Weekly time and elevation</h2><span class="card-note">hours and D+ · 12 weeks</span></div>
+          <div class="chart-box"><canvas id="c-week" aria-label="Weekly hours"></canvas></div>
+          <div class="chart-box strip"><canvas id="c-dplus" aria-label="Weekly elevation gain"></canvas></div>
         </div>
 
         <div class="two">
           <div class="card">
-            <div class="card-head"><h2>Efficiency Factor</h2><span class="card-note">flat easy runs ≥ 20 min</span></div>
-            <div class="chart-box sm"><canvas id="c-ef" aria-label="Efficiency factor over time"></canvas></div>
-            <p class="card-foot">m/min per bpm. Dots: sessions. Line: 4-session rolling average.</p>
+            <div class="card-head"><h2>Climbing speed</h2><span class="card-note">vertical m/h on sustained climbs</span></div>
+            <div class="chart-box sm"><canvas id="c-climb" aria-label="Climbing speed trend"></canvas></div>
           </div>
           <div class="card">
-            <div class="card-head"><h2>Acute / chronic load</h2><span class="card-note">8 weeks</span></div>
-            <div class="chart-box sm"><canvas id="c-acwr" aria-label="Acute to chronic load ratio"></canvas></div>
-            <p class="card-foot">Green band: 0.8 to 1.3. Above 1.5, injury risk is elevated.</p>
+            <div class="card-head"><h2>Aerobic engine</h2><span class="card-note">pace at your easy heart rate</span></div>
+            <div class="chart-box sm"><canvas id="c-engine" aria-label="Aerobic engine trend"></canvas></div>
           </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Easy share</h2><span class="card-note">time in Z1-Z2 · target ~80%</span></div>
+          <div class="easybar" id="easybar"></div>
+          <p class="card-foot" id="easybar-foot"></p>
         </div>
 
         <div class="card" id="detail" hidden>
           <div class="card-head"><h2 id="d-title">Session</h2><button class="btn-ghost sm" id="d-close" aria-label="Close details">Close</button></div>
-          <div class="detail-stats" id="d-stats"></div>
-          <div class="zones" id="d-zones"></div>
-          <div class="chart-box sm"><canvas id="c-hr" aria-label="Heart rate over the session"></canvas></div>
-          <div class="chart-box xs"><canvas id="c-pace" aria-label="Pace over the session"></canvas></div>
-          <button class="btn-secondary sm" id="d-ask">Ask the coach for an analysis</button>
+          <div class="profile-hero" id="d-hero"></div>
+          <div class="detail-grid">
+            <div class="route-wrap" id="d-route-wrap"><svg id="d-route" viewBox="0 0 300 300" role="img" aria-label="Route shape"></svg></div>
+            <div>
+              <div class="detail-stats" id="d-stats"></div>
+              <div class="zones" id="d-zones"></div>
+              <p class="coach-reading" id="d-reading"></p>
+              <button class="btn-secondary sm" id="d-ask">Ask the coach for an analysis</button>
+            </div>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-head"><h2>Recent sessions</h2><span class="card-note">click for detailed analysis</span></div>
           <div class="table-wrap">
             <table class="runs">
-              <thead><tr><th>Date</th><th>Session</th><th class="r">km</th><th class="r">Pace</th><th class="r">HR</th><th class="r">Elev.</th><th class="r">EF</th></tr></thead>
+              <thead><tr><th>Date</th><th>Session</th><th>Profile</th><th class="r">km</th><th class="r">Pace</th><th class="r">HR</th><th class="r">D+</th></tr></thead>
               <tbody id="runs"></tbody>
             </table>
           </div>
@@ -193,9 +209,9 @@
       <div class="chat-log" id="chat-log" aria-live="polite"></div>
       <div class="chips" id="chips">
         <button data-q="Analyse my latest session">Latest session</button>
-        <button data-q="Is my current load consistent? Any injury risk?">Load and risk</button>
-        <button data-q="Is my aerobic endurance improving? Base it on EF.">Aerobic progress</button>
-        <button data-q="Plan my next week based on my current load.">Next week</button>
+        <button data-q="How does my load compare to usual?">Load vs usual</button>
+        <button data-q="How is my climbing speed trending?">Climbing</button>
+        <button data-q="Am I running easy enough? Check my easy share.">Easy share</button>
       </div>
       <form class="chat-input" id="chat-form">
         <textarea id="chat-text" rows="1" maxlength="2000" placeholder="Tell me about your session…" aria-label="Message to the coach"></textarea>
@@ -207,6 +223,7 @@
   </div>
 </main>
 
+<script type="module" src="/js/landing.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>

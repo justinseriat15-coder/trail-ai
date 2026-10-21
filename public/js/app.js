@@ -1,14 +1,13 @@
 import {
   isRun, paceStr, km, durStr, dayStr, parseLocal,
-  weeklyVolume, efTrend, efChange, acwrSeries, acwrStatus, consecutiveRunDays,
-  efficiencyFactor, decoupling, timeInZones, streamSeries, zoneBounds,
-  METRIC_INFO, acwrReading, decouplingReading,
+  weeklyVolume, loadVsUsual, loadReading, easyShare, easyShareReading,
+  aerobicEngine, engineReading, todayVerdict, sessionReading, climbTrend,
+  timeInZones, decoupling, zoneBounds, METRIC_INFO,
 } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
-const fr = (x) => String(x); // English number format: decimal point
-const state = { mode: null, profile: null, activities: [], selectedId: null, chat: [], charts: {} };
-
+const fr = (x) => String(x);
+const state = { mode: null, profile: null, activities: [], insights: null, selectedId: null, chat: [], charts: {} };
 
 // ---------- Metric explanations (info tips with a live "what this means" line) ----------
 const tipRefs = {};
@@ -61,12 +60,12 @@ const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v
 function chartDefaults() {
   const C = window.Chart;
   C.defaults.color = css('--text-3');
-  C.defaults.font.family = "'DM Mono', monospace";
+  C.defaults.font.family = "'Inter', system-ui, sans-serif";
   C.defaults.font.size = 11;
   C.defaults.borderColor = css('--border');
   C.defaults.plugins.legend.display = false;
-  C.defaults.plugins.tooltip.backgroundColor = css('--surface-2');
-  C.defaults.plugins.tooltip.borderColor = css('--border');
+  C.defaults.plugins.tooltip.backgroundColor = css('--surface');
+  C.defaults.plugins.tooltip.borderColor = css('--border-strong');
   C.defaults.plugins.tooltip.borderWidth = 1;
   C.defaults.plugins.tooltip.titleColor = css('--text');
   C.defaults.plugins.tooltip.bodyColor = css('--text-2');
@@ -76,23 +75,35 @@ function chartDefaults() {
   C.defaults.animation.duration = 400;
 }
 const gridX = { grid: { display: false }, border: { display: false } };
-const gridY = { grid: { color: 'rgba(255,255,255,.06)' }, border: { display: false }, ticks: { maxTicksLimit: 5 } };
+const gridY = { grid: { color: css('--chart-grid') }, border: { display: false }, ticks: { maxTicksLimit: 4 } };
 
 function draw(key, cfg) {
   state.charts[key]?.destroy();
   state.charts[key] = new window.Chart($(key), cfg);
 }
 
-// Horizontal "good zone" band drawn behind a chart (used for ACWR 0.8–1.3).
-const bandPlugin = {
-  id: 'band',
-  beforeDatasetsDraw(chart, _args, opts) {
-    if (!opts?.from) return;
-    const { ctx, chartArea: a, scales: { y } } = chart;
+// Direct label on the final point of a series - no legends anywhere.
+const endLabelPlugin = {
+  id: 'endLabel',
+  afterDatasetsDraw(chart, _args, opts) {
+    if (!opts?.text) return;
+    const di = opts.dataset ?? 0;
+    const meta = chart.getDatasetMeta(di);
+    const data = chart.data.datasets[di].data;
+    let pt = null;
+    for (let i = meta.data.length - 1; i >= 0; i--) {
+      if (data[i] != null && meta.data[i]) { pt = meta.data[i]; break; }
+    }
+    if (!pt) return;
+    const { ctx } = chart;
     ctx.save();
-    ctx.fillStyle = opts.color;
-    const top = y.getPixelForValue(opts.to), bottom = y.getPixelForValue(opts.from);
-    ctx.fillRect(a.left, top, a.right - a.left, bottom - top);
+    ctx.font = `600 12px 'Inter', sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = css('--surface');
+    ctx.strokeText(opts.text, pt.x + 8, pt.y - 10);
+    ctx.fillStyle = opts.color || css('--text');
+    ctx.fillText(opts.text, pt.x + 8, pt.y - 10);
     ctx.restore();
   },
 };
@@ -146,8 +157,10 @@ async function loadData() {
     if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
     state.profile = data.profile;
     state.activities = data.activities;
+    state.insights = data.insights || { perActivity: {} };
     const latest = data.activities[0]?.start_date_local?.slice(0, 10);
-    $('app-sub').textContent = `${data.athlete?.firstname || (state.mode === 'demo' ? 'Demo athlete' : 'Athlete')}${latest ? ` · data through ${latest}` : ''}`;
+    const latestStr = latest ? parseLocal(latest).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+    $('app-sub').textContent = `${data.athlete?.firstname || (state.mode === 'demo' ? 'Demo athlete' : 'Athlete')}${latestStr ? ` · data through ${latestStr}` : ''}`;
     $('loading').hidden = true;
     $('data').hidden = false;
     chartDefaults();
@@ -159,122 +172,259 @@ async function loadData() {
   }
 }
 
+// Annotate activities with stream-derived zone seconds from the server.
+function annotatedActivities() {
+  return state.activities.map((a) => ({ ...a, zoneSecs: state.insights.perActivity[a.id]?.zoneSecs || null }));
+}
+
 // ---------- Dashboard ----------
 function render() {
   const { hrMax, hrRest } = state.profile;
   const acts = state.activities;
+  const runs7 = acts.filter((a) => isRun(a) && Date.now() - parseLocal(a.start_date_local) < 7 * 86400000);
 
-  // KPIs
+  // --- Metrics for the new model
   const weeks = weeklyVolume(acts, 12);
-  const sevenDaysAgo = Date.now() - 7 * 86400000;
-  const last7 = acts.filter((a) => isRun(a) && parseLocal(a.start_date_local) >= sevenDaysAgo);
-  $('k-vol').textContent = `${fr(km(last7.reduce((s, a) => s + a.distance, 0)))} km`;
-  $('k-vol-sub').textContent = `${last7.length} session${last7.length > 1 ? 's' : ''} · ${Math.round(last7.reduce((s, a) => s + (a.total_elevation_gain || 0), 0))} m gain`;
-  if (tipRefs.volume) tipRefs.volume.live.textContent = `Right now: ${fr(km(last7.reduce((s, a) => s + a.distance, 0)))} km in ${last7.length} session${last7.length > 1 ? 's' : ''} this week.`;
+  const lv = loadVsUsual(acts, hrMax, hrRest);
+  const es = easyShare(annotatedActivities());
+  const eng = aerobicEngine(acts, hrMax);
+  const climbWeeks = weeks.map((w) => {
+    let gain = 0, secs = 0;
+    for (const a of acts) {
+      const info = state.insights.perActivity[a.id];
+      if (!info?.climbs?.length) continue;
+      const ws = new Date(w.week + 'T00:00'), we = new Date(ws); we.setDate(we.getDate() + 7);
+      const d = parseLocal(a.start_date_local);
+      if (d < ws || d >= we) continue;
+      for (const c of info.climbs) { gain += c.gain; secs += c.seconds; }
+    }
+    return { week: w.week, vertMph: secs >= 300 && gain > 0 ? Math.round(gain / (secs / 3600)) : null };
+  });
+  const ct = climbTrend(climbWeeks);
 
-  const acwr = acwrSeries(acts, hrMax, hrRest, 56);
-  const now = acwr[acwr.length - 1];
-  const st = acwrStatus(now?.ratio);
-  $('k-acwr').textContent = now?.ratio != null ? now.ratio.toFixed(2) : '—';
-  $('k-acwr-sub').textContent = st.label;
-  $('k-acwr-sub').className = `kpi-sub status ${st.level}`;
-  if (tipRefs.acwr) tipRefs.acwr.live.textContent = `Right now: ${now?.ratio != null ? now.ratio.toFixed(2) : 'n/a'} - ${acwrReading(now?.ratio)}`;
+  // --- Today verdict
+  const lastRun = acts.filter(isRun)[0];
+  const hoursAgo = lastRun ? (Date.now() - parseLocal(lastRun.start_date_local)) / 3600000 : null;
+  const v = todayVerdict({ deltaPct: lv.deltaPct, engineChangePct: eng.changePct, easySharePct: es.d28.pct, hoursAgo });
+  const chip = $('t-chip');
+  chip.textContent = v.decision;
+  chip.className = `today-chip ${v.tone}`;
+  $('t-sentence').textContent = v.sentence;
+  const nums = v.numbers;
+  $('t-nums').replaceChildren(...nums.map(([b, s]) => {
+    const d = document.createElement('div');
+    const bb = document.createElement('b'); bb.textContent = b;
+    const ss = document.createElement('span'); ss.textContent = s;
+    d.append(bb, ss);
+    return d;
+  }));
 
-  const trend = efTrend(acts, hrMax);
-  const chg = efChange(trend);
-  $('k-ef').textContent = trend.length ? trend.at(-1).rolling.toFixed(2) : '—';
-  $('k-ef-sub').textContent = chg == null ? 'not enough flat easy runs' : `${chg > 0 ? '+' : ''}${chg}% over the period`;
-  if (tipRefs.ef) {
-    tipRefs.ef.live.textContent = chg == null
-      ? 'Not enough comparable runs yet: the trend needs a few flat, easy outings of 20 minutes or more.'
-      : `Right now: ${chg > 0 ? '+' : ''}${chg}% over the period. ${chg >= 3 ? 'Your aerobic base is improving.' : chg <= -3 ? 'Efficiency is slipping: check sleep, illness and recent load.' : 'Your aerobic base is holding steady.'}`;
+  // --- KPIs
+  const hours7 = runs7.reduce((s, a) => s + a.moving_time, 0) / 3600;
+  const dplus7 = Math.round(runs7.reduce((s, a) => s + (a.total_elevation_gain || 0), 0));
+  $('k-week').innerHTML = `${hours7.toFixed(1)} <small>h · ${dplus7.toLocaleString('en-GB')} m D+</small>`;
+  $('k-week-sub').textContent = `${runs7.length} session${runs7.length === 1 ? '' : 's'} in the last 7 days`;
+  if (tipRefs.week) tipRefs.week.live.textContent = `Right now: ${hours7.toFixed(1)} hours and ${dplus7} metres of climbing in the last 7 days.`;
+
+  const lr = loadReading(lv.deltaPct);
+  $('k-load').textContent = lv.deltaPct == null ? '—' : `${lv.deltaPct > 0 ? '+' : ''}${lv.deltaPct}%`;
+  const loadSub = $('k-load-sub');
+  loadSub.textContent = lr.label.replace(/^.*?vs your usual: /, '');
+  loadSub.className = `kpi-sub status ${lr.level}`;
+  if (tipRefs.load) tipRefs.load.live.textContent = `Right now: ${lr.sentence}`;
+
+  const esr = easyShareReading(es.d28.pct);
+  $('k-easy').textContent = es.d28.pct == null ? '—' : `${es.d28.pct}%`;
+  const easySub = $('k-easy-sub');
+  easySub.textContent = es.d28.pct == null ? 'no HR data' : `of running easy, 28 days`;
+  easySub.className = `kpi-sub status ${esr.level}`;
+  if (tipRefs.easy) tipRefs.easy.live.textContent = es.d28.pct == null
+    ? 'No heart-rate data in the window.'
+    : `Right now: ${es.d28.pct}% of running time in Z1-Z2 over 28 days (target ~80%), from ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data.`;
+
+  const lastVert = [...climbWeeks].reverse().find((w) => w.vertMph != null)?.vertMph;
+  const climbNow = ct.points.length ? ([...ct.points].reverse().find((w) => w.rolling != null)?.rolling ?? lastVert) : lastVert;
+  $('k-climb').textContent = climbNow == null ? '—' : `${climbNow} m/h`;
+  const climbSub = $('k-climb-sub');
+  const climbTrendTxt = ct.changePct == null ? null : `${ct.changePct > 0 ? 'up' : 'down'} ${Math.abs(ct.changePct)}% over 12 weeks`;
+  climbSub.textContent = climbNow == null
+    ? (lastVert == null ? 'no sustained climbs lately' : 'not enough climbing for a trend')
+    : ['3-week average', climbTrendTxt].filter(Boolean).join(' · ');
+  climbSub.className = 'kpi-sub' + (ct.changePct == null ? '' : ct.changePct >= 3 ? ' on-target' : ct.changePct <= -3 ? ' caution' : '');
+  if (tipRefs.climb) tipRefs.climb.live.textContent = lastVert == null
+    ? 'No sustained climbs (50 m or more at 5% or steeper) in the recent sessions.'
+    : `Right now: about ${lastVert} vertical metres per hour on sustained climbs.`;
+
+  if (eng.latestSecPerKm) {
+    const m = Math.floor(eng.latestSecPerKm / 60), s2 = String(Math.round(eng.latestSecPerKm % 60)).padStart(2, '0');
+    $('k-engine').innerHTML = `${m}:${s2} <small>/km at ${eng.refHr} bpm</small>`;
+    const engSub = $('k-engine-sub');
+    engSub.textContent = eng.changePct == null ? 'not enough flat easy runs' : `${engineReading(eng.changePct)} (${eng.changePct > 0 ? '+' : ''}${eng.changePct}%)`;
+    engSub.className = 'kpi-sub' + (eng.changePct == null ? '' : eng.changePct >= 3 ? ' on-target' : eng.changePct <= -3 ? ' caution' : '');
+  } else {
+    $('k-engine').textContent = '—';
+    $('k-engine-sub').textContent = 'not enough flat easy runs';
   }
+  if (tipRefs.engine) tipRefs.engine.live.textContent = eng.latestSecPerKm
+    ? 'Only flat, easy runs of 20 minutes or more feed this, so hilly runs never inflate it.'
+    : 'Needs a few flat, easy runs of 20 minutes or more.';
 
-  const consec = consecutiveRunDays(acts);
-  $('k-consec').textContent = consec;
-  const consecSub = $('k-consec-sub');
-  consecSub.textContent = consec >= 3 ? 'max in 14 d · high density' : 'max in 14 d';
-  consecSub.className = consec >= 3 ? 'kpi-sub status serious' : 'kpi-sub';
-  if (tipRefs.consec) tipRefs.consec.live.textContent = consec >= 3 ? 'Right now: three or more days in a row. Keep today very easy or take a rest day.' : 'Right now: no dense streak. Alternating run and rest days keeps fatigue low.';
-
-  // Weekly volume
+  // --- Weekly hours + D+
   const label = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  draw('c-volume', {
+  draw('c-week', {
     type: 'bar',
     data: {
       labels: weeks.map((w) => label(w.week)),
       datasets: [{
-        data: weeks.map((w) => w.km),
-        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--series-1-soft') : css('--series-1'))),
-        borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 34,
+        label: 'Hours', data: weeks.map((w) => w.hours),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.82)')),
+        borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
       }],
     },
     options: {
-      scales: { x: { ...gridX, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } }, y: { ...gridY, title: { display: true, text: 'km' } } },
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ...gridX, ticks: { display: false } },
+        y: { ...gridY, title: { display: true, text: 'hours' }, beginAtZero: true },
+      },
       plugins: { tooltip: { callbacks: {
         title: (it) => `Week of ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (in progress)' : ''}`,
-        label: (it) => { const w = weeks[it.dataIndex]; return [`${fr(w.km)} km · ${fr(w.hours)} h`, `${w.dplus} m gain · ${w.count} session${w.count > 1 ? 's' : ''}`]; },
+        label: (it) => { const w = weeks[it.dataIndex]; return `${w.hours} h · ${w.km} km · ${w.count} session${w.count === 1 ? '' : 's'}`; },
       } } },
     },
   });
 
-  // EF trend
-  draw('c-ef', {
+  // D+ as its own aligned strip underneath, same date axis (labels only here).
+  draw('c-dplus', {
+    type: 'bar',
+    data: {
+      labels: weeks.map((w) => label(w.week)),
+      datasets: [{
+        label: 'D+', data: weeks.map((w) => w.dplus),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.38)')),
+        borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
+      }],
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ...gridX, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } },
+        y: { ...gridY, title: { display: true, text: 'm D+' }, beginAtZero: true, ticks: { maxTicksLimit: 2 } },
+      },
+      layout: { padding: { right: 64 } },
+      plugins: { endLabel: { text: `${weeks[weeks.length - 1].dplus.toLocaleString('en-GB')} m`, color: css('--text-2') }, tooltip: { callbacks: {
+        title: (it) => `Week of ${it[0].label}${it[0].dataIndex === weeks.length - 1 ? ' (in progress)' : ''}`,
+        label: (it) => `${weeks[it.dataIndex].dplus.toLocaleString('en-GB')} m of climbing`,
+      } } },
+    },
+    plugins: [endLabelPlugin],
+  });
+
+  // --- Climbing speed trend
+  const cw = ct.points;
+  const lastRoll = [...cw].reverse().find((w) => w.rolling != null)?.rolling;
+  draw('c-climb', {
     type: 'line',
     data: {
-      labels: trend.map((p) => p.date),
+      labels: cw.map((w) => w.week),
       datasets: [
-        { data: trend.map((p) => p.ef), showLine: false, pointRadius: 3.5, pointHoverRadius: 6, pointBackgroundColor: css('--series-1-soft'), pointBorderWidth: 0 },
-        { data: trend.map((p) => p.rolling), borderColor: css('--series-1'), borderWidth: 2, pointRadius: 0, tension: .35 },
+        { data: cw.map((w) => w.vertMph), showLine: false, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: css('--surface'), pointBorderColor: css('--text-3'), pointBorderWidth: 1.5 },
+        { data: cw.map((w) => w.rolling), borderColor: css('--brand'), borderWidth: 2, pointRadius: 0, tension: .3, spanGaps: true },
       ],
     },
     options: {
       interaction: { mode: 'index', intersect: false },
-      scales: { x: { ...gridX, ticks: { maxTicksLimit: 5, callback(v) { return label(this.getLabelForValue(v)); } } }, y: gridY },
-      plugins: { tooltip: { callbacks: {
-        title: (it) => dayStr(trend[it[0].dataIndex].date + 'T12:00:00'),
-        label: (it) => { const p = trend[it.dataIndex]; return it.datasetIndex === 0 ? `EF ${fr(p.ef)} · ${p.pace}/km at ${p.hr} bpm` : `Rolling average ${fr(p.rolling)}`; },
+      scales: { x: { ...gridX, ticks: { maxTicksLimit: 4, callback(v) { return label(this.getLabelForValue(v)); } } }, y: { ...gridY, title: { display: true, text: 'm/h' } } },
+      layout: { padding: { right: 64 } },
+      plugins: { endLabel: { dataset: 1, text: lastRoll != null ? `${lastRoll} m/h` : '', color: css('--brand-2') }, tooltip: { callbacks: {
+        title: (it) => `Week of ${label(cw[it[0].dataIndex].week)}`,
+        label: (it) => it.raw == null ? 'no sustained climbs' : `${it.raw} m/h${it.datasetIndex === 1 ? ' (rolling median)' : ' vertical'}`,
       } } },
     },
+    plugins: [endLabelPlugin],
   });
 
-  // ACWR
-  const series = acwr.filter((p) => p.ratio != null);
-  draw('c-acwr', {
+  // --- Aerobic engine trend (pace at easy HR; up = faster)
+  const ep = eng.points;
+  draw('c-engine', {
     type: 'line',
-    data: { labels: series.map((p) => p.date), datasets: [{ data: series.map((p) => p.ratio), borderColor: css('--series-1'), borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: .3 }] },
+    data: {
+      labels: ep.map((p) => p.date),
+      datasets: [
+        { data: ep.map((p) => p.secPerKm), showLine: false, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: css('--surface'), pointBorderColor: css('--text-3'), pointBorderWidth: 1.5 },
+        { data: ep.map((p) => p.rollingSecPerKm), borderColor: css('--brand'), borderWidth: 2, pointRadius: 0, tension: .35 },
+      ],
+    },
     options: {
       interaction: { mode: 'index', intersect: false },
       scales: {
-        x: { ...gridX, ticks: { maxTicksLimit: 5, callback(v) { return label(this.getLabelForValue(v)); } } },
-        y: { ...gridY, suggestedMin: 0.5, suggestedMax: 1.6 },
+        x: { ...gridX, ticks: { maxTicksLimit: 4, callback(v) { return dayStr(this.getLabelForValue(v) + 'T12:00:00').slice(4); } } },
+        y: { ...gridY, reverse: true, ticks: { maxTicksLimit: 4, callback: (val) => { const m = Math.floor(val / 60); return `${m}:${String(Math.round(val % 60)).padStart(2, '0')}`; } } },
       },
-      plugins: {
-        band: { from: 0.8, to: 1.3, color: 'rgba(12,163,12,.10)' },
-        tooltip: { callbacks: {
-          title: (it) => dayStr(series[it[0].dataIndex].date + 'T12:00:00'),
-          label: (it) => { const p = series[it.dataIndex]; return [`Ratio ${fr(p.ratio)} · ${acwrStatus(p.ratio).label}`, `Acute ${p.acute} · Chronic ${p.chronic}`]; },
-        } },
-      },
+      layout: { padding: { right: 64 } },
+      plugins: { endLabel: { dataset: 1, text: eng.latestSecPerKm ? `${Math.floor(eng.latestSecPerKm / 60)}:${String(Math.round(eng.latestSecPerKm % 60)).padStart(2, '0')}/km` : '', color: css('--brand-2') }, tooltip: { callbacks: {
+        title: (it) => dayStr(ep[it[0].dataIndex].date + 'T12:00:00'),
+        label: (it) => { const sec = it.raw; return `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}/km at ${eng.refHr} bpm${it.datasetIndex === 1 ? ' (rolling)' : ''}`; },
+      } } },
     },
-    plugins: [bandPlugin],
+    plugins: [endLabelPlugin],
   });
 
-  // Runs table
+  // --- Easy-share bars
+  const bar = $('easybar');
+  const rows = [
+    ['7 days', es.d7],
+    ['28 days', es.d28],
+  ];
+  bar.replaceChildren(...rows.map(([lbl, d]) => {
+    const row = document.createElement('div');
+    row.className = 'easybar-row';
+    const l = document.createElement('span'); l.textContent = lbl;
+    const track = document.createElement('div'); track.className = 'easybar-track';
+    if (d.pct != null) {
+      const fill = document.createElement('div');
+      fill.className = `easybar-fill${d.pct < 68 ? ' low' : ''}`;
+      fill.style.width = `${d.pct}%`;
+      track.appendChild(fill);
+    }
+    const target = document.createElement('div');
+    target.className = 'easybar-target';
+    target.style.left = '80%';
+    target.title = 'Target ~80%';
+    track.appendChild(target);
+    const val = document.createElement('b');
+    val.innerHTML = d.pct == null ? '—' : `${d.pct}% <span>(${d.covered}/${d.sessions} runs)</span>`;
+    row.append(l, track, val);
+    return row;
+  }));
+  $('easybar-foot').textContent = es.d28.pct == null
+    ? 'Needs sessions recorded with heart rate.'
+    : `Target ~80% easy. ${esr.label}. Based on ${es.d28.covered} of ${es.d28.sessions} sessions with heart-rate data in 28 days.`;
+
+  // --- Recent sessions
   const tbody = $('runs');
   tbody.replaceChildren();
   for (const a of acts.filter(isRun).slice(0, 15)) {
     const tr = document.createElement('tr');
     tr.dataset.id = a.id;
     tr.tabIndex = 0;
-    const ef = efficiencyFactor(a);
-    const cells = [dayStr(a.start_date_local), a.name, fr(km(a.distance)), paceStr(a.average_speed),
-      a.average_heartrate ? Math.round(a.average_heartrate) : '—', Math.round(a.total_elevation_gain || 0), ef ? fr(ef.toFixed(2)) : '—'];
+    const cells = [dayStr(a.start_date_local), a.name];
     cells.forEach((c, i) => {
       const td = document.createElement('td');
       td.textContent = c;
       if (i === 1) td.className = 'name';
-      if (i >= 2) td.className = 'r';
+      tr.appendChild(td);
+    });
+    const sparkTd = document.createElement('td');
+    const spark = state.insights.perActivity[a.id]?.spark;
+    if (spark) sparkTd.appendChild(sparkSvg(spark));
+    tr.appendChild(sparkTd);
+    const nums = [fr(km(a.distance)), paceStr(a.average_speed),
+      a.average_heartrate ? Math.round(averageHR(a)) : '—', Math.round(a.total_elevation_gain || 0)];
+    nums.forEach((c) => {
+      const td = document.createElement('td');
+      td.textContent = c;
+      td.className = 'r';
       tr.appendChild(td);
     });
     tr.addEventListener('click', () => openDetail(a.id));
@@ -283,7 +433,35 @@ function render() {
   }
 }
 
-// ---------- Activity detail (streams) ----------
+const averageHR = (a) => a.average_heartrate;
+
+// ---------- Small SVG helpers ----------
+const SVGNS = 'http://www.w3.org/2000/svg';
+function mk(tag, attrs = {}, parent) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+const pathFrom = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+
+function sparkSvg(spark) {
+  const svg = mk('svg', { viewBox: '0 0 72 22', class: 'spark', 'aria-hidden': 'true' });
+  const pts = spark.map((y, i) => [(i / (spark.length - 1)) * 72, 20 - y * 18]);
+  mk('polyline', { points: pts.map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' ') }, svg);
+  return svg;
+}
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ---------- Activity detail ----------
 async function openDetail(id) {
   const a = state.activities.find((x) => String(x.id) === String(id));
   if (!a) return;
@@ -292,8 +470,10 @@ async function openDetail(id) {
   const card = $('detail');
   card.hidden = false;
   $('d-title').textContent = `${a.name} · ${dayStr(a.start_date_local)}`;
-  $('d-zones').replaceChildren();
+  $('d-hero').replaceChildren();
+  $('d-reading').textContent = '';
   setStats(a, null);
+  buildRoute(a);
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
@@ -301,40 +481,175 @@ async function openDetail(id) {
     const { streams, error } = await r.json();
     if (!r.ok) throw new Error(error);
     if (state.selectedId !== a.id) return;
-    setStats(a, streams);
+    const info = state.insights.perActivity[a.id] || {};
+    setStats(a, streams, info);
+    buildHero(streams, info.climbs || []);
     renderZones(streams);
-    renderStreamCharts(streams);
+    const zones = info.zoneSecs;
+    const flat = ((a.total_elevation_gain || 0) / (a.distance / 1000)) <= 15;
+    const dec = flat ? decoupling(streams) : null;
+    $('d-reading').textContent = sessionReading(a, { zones, climbs: info.climbs || [], dec, flat, hrMax: state.profile.hrMax });
   } catch (e) {
     $('d-zones').textContent = `Streams unavailable (${e.message}).`;
   }
 }
 
-function setStats(a, streams) {
-  const dec = streams ? decoupling(streams) : null;
+function setStats(a, streams, info = {}) {
+  const dplusPerKm = (a.total_elevation_gain || 0) / (a.distance / 1000);
+  const flat = dplusPerKm <= 15;
+  const dec = streams && flat ? decoupling(streams) : null;
   const items = [
     [`${fr(km(a.distance))} km`, 'distance'],
     [durStr(a.moving_time), 'moving time'],
     [`${paceStr(a.average_speed)}/km`, 'average pace'],
     [a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm` : '—', 'average HR'],
     [`${Math.round(a.total_elevation_gain || 0)} m`, 'elevation gain'],
-    [dec == null ? (streams ? 'n/a' : '…') : `${dec}%`, 'Pa:HR decoupling', 'decoupling'],
   ];
+  if (info.vertMph != null) items.push([`${info.vertMph} m/h`, 'climbing speed', 'climb']);
+  if (flat) items.push([streams ? (dec == null ? 'n/a' : `${dec}%`) : '…', 'Pa:HR decoupling', 'decoupling']);
   const box = $('d-stats');
-  const cells = items.map(([v, l, metric]) => {
+  const cells = items.map(([val, lab, metric]) => {
     const d = document.createElement('div');
-    const b = document.createElement('b'); b.textContent = v;
-    const s = document.createElement('span'); s.textContent = l;
+    const b = document.createElement('b'); b.textContent = val;
+    const s = document.createElement('span'); s.textContent = lab;
     if (metric) s.appendChild(makeTip(metric));
     d.append(b, s);
     return d;
   });
-  if (streams) {
-    const note = document.createElement('p');
-    note.className = 'stat-note';
-    note.textContent = decouplingReading(dec);
-    cells.push(note);
-  }
   box.replaceChildren(...cells);
+}
+
+// The signature screen: elevation hero + HR/pace on one distance axis.
+function buildHero(streams, climbs) {
+  const box = $('d-hero');
+  box.replaceChildren();
+  const { distance: dist, altitude: alt, heartrate: hr, velocity_smooth: vel } = streams;
+  if (!dist || !alt) return;
+  const W = 800, H = 210, padT = 36, padB = 22;
+  const step = Math.max(1, Math.floor(dist.length / 400));
+  const pts = [];
+  for (let i = 0; i < dist.length; i += step) pts.push({ km: dist[i] / 1000, alt: alt[i], hr: hr?.[i], v: vel?.[i] });
+  const xMax = pts.at(-1).km || 1;
+  const yMin = Math.min(...pts.map((p) => p.alt));
+  const yMax = Math.max(...pts.map((p) => p.alt));
+  const ySpan = (yMax - yMin) || 1;
+  const X = (kmv) => (kmv / xMax) * W;
+  const Y = (av) => padT + (1 - (av - yMin) / ySpan) * (H - padT - padB);
+
+  const svg = mk('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Elevation profile of the session' });
+  const defs = mk('defs', {}, svg);
+  const grad = mk('linearGradient', { id: 'dgrad', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+  mk('stop', { offset: '0', 'stop-color': '#d63f17', 'stop-opacity': '.22' }, grad);
+  mk('stop', { offset: '1', 'stop-color': '#d63f17', 'stop-opacity': '0' }, grad);
+
+  // Climb highlights behind the line
+  for (const c of climbs) {
+    mk('rect', { x: X(c.startKm), y: padT - 14, width: Math.max(2, X(c.endKm) - X(c.startKm)), height: H - padT - padB + 14, class: 'phero-climb' }, svg);
+  }
+  // Area + line
+  const line = pts.map((p) => [X(p.km), Y(p.alt)]);
+  mk('path', { d: `${pathFrom(line)} L${W},${H - padB + 8} L0,${H - padB + 8} Z`, class: 'phero-area' }, svg);
+  mk('path', { d: pathFrom(line), class: 'phero-line' }, svg);
+
+  // Annotations: the biggest climbs, plus km ticks
+  const big = [...climbs].sort((a, b) => b.gain - a.gain).slice(0, 2);
+  big.forEach((c) => {
+    const x = X(c.endKm);
+    const altTop = pts.reduce((best, p) => (Math.abs(p.km - c.endKm) < Math.abs(best.km - c.endKm) ? p : best), pts[0]).alt;
+    mk('circle', { cx: x, cy: Y(altTop), r: 4, class: 'phero-dot' }, svg);
+    const anchor = x > W - 120 ? 'end' : 'middle';
+    const tx = x > W - 120 ? x + 4 : x;
+    const t1 = mk('text', { x: tx, y: Y(altTop) - 22, 'text-anchor': anchor, class: 'phero-annot' }, svg);
+    const sc1 = mk('tspan', { class: 'sc' }, t1); sc1.textContent = 'Climb';
+    const rest1 = mk('tspan', {}, t1); rest1.textContent = ` · ${c.gain} m D+`;
+    const t2 = mk('text', { x: tx, y: Y(altTop) - 10, 'text-anchor': anchor, class: 'phero-annot sub' }, svg);
+    t2.textContent = `${c.vertMph} m/h vertical`;
+  });
+  const kmEvery = Math.max(1, Math.round(xMax / 6));
+  for (let k = 0; k <= xMax; k += kmEvery) {
+    const edge = k === 0 ? 'start' : (k + kmEvery > xMax ? 'end' : 'middle');
+    const t = mk('text', { x: k === 0 ? 2 : (edge === 'end' ? W - 2 : X(k)), y: H - 6, 'text-anchor': edge, class: 'phero-tick' }, svg);
+    t.textContent = `${k} km`;
+  }
+  box.appendChild(svg);
+
+  // HR and pace, same distance axis
+  if (hr) box.appendChild(subChart(pts, (p) => p.hr, 'phero-hr', 'bpm', W, X));
+  if (vel) box.appendChild(subChart(pts, (p) => (p.v > 0.5 ? 1000 / p.v / 60 : null), 'phero-pace', 'min/km', W, X, true));
+}
+
+function subChart(pts, get, cls, unit, W, X, reverse = false) {
+  const H = 74, padT = 8, padB = 14;
+  const vals = pts.map(get).filter((x) => x != null);
+  if (!vals.length) return document.createDocumentFragment();
+  const rawLo = Math.min(...vals), rawHi = Math.max(...vals);
+  const pad = (rawHi - rawLo || 1) * 0.15;
+  const lo = rawLo - pad, hi = rawHi + pad;
+  const Y = (v) => reverse
+    ? padT + ((v - lo) / (hi - lo)) * (H - padT - padB)
+    : padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  const svg = mk('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${unit} over the session` });
+  const line = pts.filter((p) => get(p) != null).map((p) => [X(p.km), Y(get(p))]);
+  mk('path', { d: pathFrom(line), class: cls }, svg);
+  const loT = mk('text', { x: W - 2, y: Math.min(H - 4, Y(lo) + 10), 'text-anchor': 'end', class: 'phero-tick' }, svg);
+  loT.textContent = unit === 'bpm' ? `${Math.round(rawLo)} bpm` : `${paceFromMinPerKm(rawLo)}${rawLo >= 15 ? ' (hike)' : ''}`;
+  const hiT = mk('text', { x: W - 2, y: Math.max(11, Y(hi) - 4), 'text-anchor': 'end', class: 'phero-tick' }, svg);
+  hiT.textContent = unit === 'bpm' ? `${Math.round(rawHi)} bpm` : `${paceFromMinPerKm(rawHi)}${rawHi >= 15 ? ' (hike)' : ''}`;
+  return svg;
+}
+
+const paceFromMinPerKm = (mpk) => `${Math.floor(mpk)}:${String(Math.round((mpk % 1) * 60)).padStart(2, '0')}`;
+
+// Invented route shape on a contour background (demo routes are fictional by design).
+function buildRoute(a) {
+  const svg = $('d-route');
+  svg.replaceChildren();
+  const rand = mulberry32(Number(a.id) || 1);
+  const outback = /out-and-back/i.test(a.name || '');
+  const loop = (rBase, wobble, phase) => {
+    const N = 10;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * 2 * Math.PI;
+      const r = rBase * (1 + (rand() - 0.5) * wobble);
+      pts.push([150 + Math.cos(a + phase) * r, 150 + Math.sin(a + phase) * r * 0.86]);
+    }
+    let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+    for (let i = 0; i < N; i++) {
+      const p0 = pts[(i - 1 + N) % N], p1 = pts[i], p2 = pts[(i + 1) % N], p3 = pts[(i + 2) % N];
+      d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+    }
+    return d + 'Z';
+  };
+  for (let c = 0; c < 4; c++) mk('path', { d: loop(118 + c * 16, 0.12, c * 0.9), class: 'route-contour' }, svg);
+  let d, startPt;
+  if (outback) {
+    // Out and back: one wobbly line out, the return offset beside it.
+    const pts = [];
+    const N2 = 7;
+    for (let i = 0; i <= N2; i++) {
+      const t = i / N2;
+      pts.push([40 + t * 190 + (i > 0 && i < N2 ? (rand() - 0.5) * 46 : 0), 230 - t * 160 + (i > 0 && i < N2 ? (rand() - 0.5) * 40 : 0)]);
+    }
+    const smooth = (pp) => {
+      let dd = `M${pp[0][0].toFixed(1)},${pp[0][1].toFixed(1)}`;
+      for (let i = 1; i < pp.length; i++) {
+        const p0 = pp[Math.max(0, i - 2)], p1 = pp[i - 1], p2 = pp[i], p3 = pp[Math.min(pp.length - 1, i + 1)];
+        dd += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+      }
+      return dd;
+    };
+    const back = pts.map(([x, y]) => [x + 20, y + 22]).reverse();
+    d = smooth(pts) + ' ' + smooth(back).replace('M', 'L');
+    startPt = pts[0];
+  } else {
+    d = loop(80, 0.55, rand() * 6);
+    startPt = d.match(/M([\d.]+),([\d.]+)/).slice(1);
+  }
+  mk('path', { d, class: 'route-line' }, svg);
+  mk('circle', { cx: startPt[0], cy: startPt[1], r: 5, class: 'route-start' }, svg);
+  const lbl = mk('text', { x: 12, y: 288, class: 'route-label' }, svg);
+  lbl.textContent = 'Route · fictional in demo';
 }
 
 function renderZones(streams) {
@@ -357,42 +672,13 @@ function renderZones(streams) {
     item.append(`Z${i + 1} ${bounds[i].min}-${bounds[i].max} · ${x.pct}%`);
     legend.appendChild(item);
   });
-  const note = document.createElement('p');
-  note.className = 'stat-note';
-  note.textContent = `${METRIC_INFO.zones.what} ${METRIC_INFO.zones.meaning}`;
-  box.replaceChildren(bar, legend, note);
-}
-
-function renderStreamCharts(streams) {
-  const pts = streamSeries(streams, 220);
-  const hasKm = pts.length && pts[0].km != null;
-  const labels = pts.map((p) => (hasKm ? fr(p.km.toFixed(1)) : Math.round(p.t / 60)));
-  const unit = hasKm ? 'km' : 'min';
-  const xAxis = { ...gridX, ticks: { maxTicksLimit: 6, maxRotation: 0, callback(v) { return `${this.getLabelForValue(v)} ${unit}`; } } };
-  draw('c-hr', {
-    type: 'line',
-    data: { labels, datasets: [{ data: pts.map((p) => p.hr), borderColor: css('--series-1'), borderWidth: 2, pointRadius: 0, tension: .25 }] },
-    options: {
-      interaction: { mode: 'index', intersect: false },
-      scales: { x: xAxis, y: { ...gridY, title: { display: true, text: 'bpm' } } },
-      plugins: { tooltip: { callbacks: { title: (it) => `${it[0].label} ${unit}`, label: (it) => `FC ${it.raw} bpm · ${paceStr(pts[it.dataIndex].v)}/km` } } },
-    },
-  });
-  draw('c-pace', {
-    type: 'line',
-    data: { labels, datasets: [{ data: pts.map((p) => (p.v > 0.5 ? +(1000 / p.v / 60).toFixed(2) : null)), borderColor: css('--text-3'), borderWidth: 1.5, pointRadius: 0, tension: .25, spanGaps: true }] },
-    options: {
-      interaction: { mode: 'index', intersect: false },
-      scales: { x: { ...xAxis, ticks: { display: false } }, y: { ...gridY, reverse: true, title: { display: true, text: 'min/km' }, ticks: { maxTicksLimit: 3, callback: (v) => paceStr(1000 / (v * 60)) } } },
-      plugins: { tooltip: { callbacks: { title: (it) => `${it[0].label} ${unit}`, label: (it) => `Allure ${paceStr(pts[it.dataIndex].v)}/km` } } },
-    },
-  });
+  box.replaceChildren(bar, legend);
 }
 
 // ---------- Chat ----------
 function initChat() {
   addMsg('assistant', state.mode === 'demo'
-    ? "I'm the demo athlete's coach. I have their training load, aerobic efficiency and last 15 sessions. Describe a session as if it were yours, or ask a question."
+    ? "I'm the demo athlete's coach. I track their load vs usual, easy share, climbing speed and aerobic engine, plus the last 15 sessions. Describe a session as if it were yours, or ask a question."
     : 'Connected to your Strava data. Tell me about your session ("good run this morning, heavy legs at the start…") and I\'ll find which one it is.');
   $('chat-form').addEventListener('submit', (e) => { e.preventDefault(); send($('chat-text').value); });
   $('chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('chat-text').value); } });
@@ -456,14 +742,14 @@ async function send(text) {
       if (!answer.text) steps.remove(); else steps.finish();
       if (answer.error) throw new Error(answer.error);
       state.chat.push({ role: 'assistant', content: answer.text });
-      if (bubble) bubble.innerHTML = renderMarkdown(answer.text); // authoritative final text
+      if (bubble) bubble.innerHTML = renderMarkdown(answer.text);
       else addMsg('assistant', answer.text);
       if (answer.model) $('chat-model').textContent = answer.model;
     }
   } catch (e) {
     typing.remove();
     steps.remove();
-    state.chat.pop(); // keep the history alternating user/assistant
+    state.chat.pop();
     addMsg('assistant', e.message, true);
   } finally {
     busy = false;
@@ -482,8 +768,6 @@ function addMsg(role, text, isError = false) {
   return div;
 }
 
-// Visible agent steps: one muted line per tool call, labelled from what the
-// server actually executed. Sits above the reply it belongs to.
 function addSteps() {
   const div = document.createElement('div');
   div.className = 'msg agent-steps';
@@ -503,9 +787,6 @@ function addSteps() {
   };
 }
 
-// Reads the coach's event stream: {type:'step'} while the agent fetches data,
-// {type:'delta'} text chunks as the reply is written, then one final
-// {type:'reply'} (or {type:'error'}). Resolves with the reply payload.
 async function readCoachStream(body, { onStep, onDelta } = {}) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -539,7 +820,6 @@ function addTyping() {
   return div;
 }
 
-// Tiny, safe markdown: escape everything first, then allow bold, lists and paragraphs.
 function renderMarkdown(src) {
   const esc = src.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/^#{1,4}\s*/, '');
