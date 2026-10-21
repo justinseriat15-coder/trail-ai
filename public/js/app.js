@@ -547,7 +547,8 @@ function buildHero(streams, climbs) {
   });
   const kmEvery = Math.max(1, Math.round(xMax / 6));
   for (let k = 0; k <= xMax; k += kmEvery) {
-    const t = mk('text', { x: X(k), y: H - 6, 'text-anchor': 'middle', class: 'phero-tick' }, svg);
+    const edge = k === 0 ? 'start' : (k + kmEvery > xMax ? 'end' : 'middle');
+    const t = mk('text', { x: k === 0 ? 2 : (edge === 'end' ? W - 2 : X(k)), y: H - 6, 'text-anchor': edge, class: 'phero-tick' }, svg);
     t.textContent = `${k} km`;
   }
   box.appendChild(svg);
