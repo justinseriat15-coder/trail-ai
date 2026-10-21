@@ -26,6 +26,9 @@
   "functions": {
     "api/chat.js": {
       "maxDuration": 60
+    },
+    "api/calibration.js": {
+      "maxDuration": 60
     }
   }
 }
