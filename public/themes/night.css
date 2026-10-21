@@ -1,0 +1,50 @@
+/* Option 1 - Night topo: the map at night. Ink-blue sheet, contour lines in low light, same trail-blaze red. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root {
+  color-scheme: dark;
+  --bg: #0e1721; --surface: #131f2b; --surface-2: #192838; --border: #22354a; --border-strong: #345069;
+  --text: #e8e6df; --text-2: #aeb9c2; --text-3: #73879a;
+  --brand: #d63f17; --brand-2: #ff7a52; --brand-soft: rgba(214,63,23,.18);
+  --moss: #86b377; --moss-soft: rgba(134,179,119,.16); --good: #86b377; --warning: #d6a63c; --serious: #d6a63c; --critical: #d6a63c; --ochre: #d6a63c;
+  --z1: #5f86a3; --z2: #7fb0c9; --z3: #d6b755; --z4: #e08a45; --z5: #e0482a;
+  --contour: rgba(159,196,224,.13); --chart-grid: rgba(159,196,224,.10);
+  --bar-strong: rgba(232,230,223,.86); --bar-soft: rgba(232,230,223,.34);
+  --mono: 'IBM Plex Mono', ui-monospace, monospace; --r: 3px;
+}
+html, body { background: var(--bg) url(/themes/contours-night.svg) center top / cover fixed no-repeat; }
+.topbar { background: var(--bg); backdrop-filter: none; border-bottom: 1px solid var(--border-strong); }
+.logo { letter-spacing: .04em; font-family: var(--mono); font-weight: 500; font-stretch: 100%; font-size: 15px; }
+.mode-pill { border-radius: 2px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; background: transparent; }
+.btn-primary, .btn-secondary, .btn-ghost { border-radius: 2px; }
+.btn-secondary { border-color: var(--border-strong); }
+/* Map-legend boxes: hairline frames with registration ticks, not soft cards */
+.card, .kpi, .today, .preview-frame, .arch-flow, .col-chat { border-radius: 2px; background: rgba(19,31,43,.94); box-shadow: none; }
+.card, .kpi { border-color: var(--border-strong); }
+.kpi::before, .card::before { content: ''; position: absolute; left: -1px; top: -1px; width: 9px; height: 9px; border-left: 2px solid var(--brand); border-top: 2px solid var(--brand); }
+.card { position: relative; }
+.kpi-label, .card-note, .today-nums span, .card-head h2 { font-family: var(--mono); font-stretch: 100%; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; font-weight: 500; }
+.card-head h2 { color: var(--text); }
+.kpi-value, .today-nums b, .pv-kpis b, .detail-stats div b { font-family: var(--mono); font-stretch: 100%; font-weight: 500; letter-spacing: -.03em; }
+.today { border-color: var(--border-strong); border-left: 3px solid var(--brand); }
+.today-chip { border-radius: 2px; font-family: var(--mono); font-stretch: 100%; letter-spacing: .08em; font-weight: 500; font-size: 15px; }
+.today-chip.neutral { background: transparent; color: var(--text); border: 1px solid var(--text); }
+.today-chip.good { color: #0e1721; }
+.today-chip.warning, .today-chip.serious { color: #0e1721; }
+.col-data { border-right-color: var(--border-strong); }
+.hero h1 { font-weight: 800; letter-spacing: -.01em; color: var(--text); }
+.hero .topo { stroke: rgba(159,196,224,.2); stroke-width: 1; }
+.pf-area { fill: rgba(214,63,23,.14); }
+.phero-area { fill: rgba(214,63,23,.12); }
+.pf-mark::after, .phero-dot { fill: var(--bg); }
+.pf-mark::after { background: var(--bg); }
+.steps li { border-top-color: var(--border-strong); }
+.route-wrap, .easybar-track, .race-track { background: var(--bg); }
+.route-line { stroke: var(--text); }
+.pv-user, .msg.user, .btn-primary, .chat-input button, .coach-fab { color: #fff; }
+.msg.assistant { background: var(--surface-2); }
+.skel::after { background: rgba(159,196,224,.06); }
+.demo-banner { background: transparent; border-bottom-color: var(--border-strong); }
+.runs tbody tr:hover, .runs tbody tr.sel { background: var(--surface-2); }
+.tip-bubble { box-shadow: none; }
+.kpi-value small { font-family: var(--body); font-weight: 400; letter-spacing: 0; }
+.kpi-value { font-size: clamp(24px, 2.4vw, 31px); }

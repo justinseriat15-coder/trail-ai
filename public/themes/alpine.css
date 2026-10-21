@@ -1,0 +1,59 @@
+/* Option 2 - Alpine: white, glacier blue-greys, hairlines. Summit-marker and trailhead-signage restraint. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --surface: #ffffff; --surface-2: #eef3f6; --border: #d3dde4; --border-strong: #9fb2bf;
+  --text: #08141d; --text-2: #394f60; --text-3: #70869a;
+  --brand: #d63f17; --brand-2: #b3300f; --brand-soft: rgba(214,63,23,.08);
+  --moss: #2b7a6b; --moss-soft: rgba(43,122,107,.12); --good: #2b7a6b; --warning: #a06f0b; --serious: #a06f0b; --critical: #a06f0b; --ochre: #a06f0b;
+  --z1: #b7d2e3; --z2: #6fa6c7; --z3: #3f7fa8; --z4: #d9893f; --z5: #c23d20;
+  --contour: rgba(36,92,130,.10); --chart-grid: rgba(8,20,29,.08);
+  --bar-strong: #08141d; --bar-soft: #9fb2bf;
+  --sans: 'Inter', system-ui, sans-serif; --mono: 'DM Mono', ui-monospace, monospace; --r: 0;
+}
+html, body { background: #fff; }
+.topbar { background: #fff; backdrop-filter: none; border-bottom: 1px solid var(--text); }
+.logo { font-family: var(--sans); font-stretch: 100%; font-weight: 700; letter-spacing: .14em; font-size: 13px; }
+.mode-pill, .btn-primary, .btn-secondary, .btn-ghost, .today-chip, .chips button, .msg, .msg.user, .msg.assistant, .pv-user, .pv-coach, .chat-input textarea, .chat-input button { border-radius: 0; }
+.mode-pill { text-transform: uppercase; letter-spacing: .12em; font-size: 10px; border-color: var(--text); background: #fff; }
+.btn-primary { font-family: var(--sans); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: 12px; }
+.btn-secondary { border-color: var(--text); font-family: var(--sans); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: 12px; }
+.hero h1 { font-family: var(--sans); font-stretch: 100%; font-weight: 300; letter-spacing: -.045em; line-height: .96; font-size: clamp(44px, 8vw, 104px); max-width: 12ch; }
+.hero .topo { stroke: rgba(36,92,130,.22); stroke-width: .7; }
+.lede { color: var(--text-2); }
+.pf-area { fill: rgba(214,63,23,.07); }
+.pf-line, .phero-line { stroke-width: 1.5; }
+.phero-area { fill: rgba(214,63,23,.06); }
+.pf-mark { font-family: var(--mono); }
+.pf-mark::after { border-radius: 0; width: 7px; height: 7px; border-width: 1.5px; background: #fff; }
+/* Flat, ruled sections instead of boxed cards */
+.card, .kpi, .today, .preview-frame, .arch-flow { border-radius: 0; box-shadow: none; background: #fff; border: 0; border-top: 1px solid var(--text); padding-left: 0; padding-right: 0; }
+.kpi { padding: 12px 14px 14px 0; border-top: 1px solid var(--text); }
+.kpis { gap: 0 20px; }
+.card-head { border-bottom: 1px solid var(--border); }
+.card-head h2, .kpi-label, .card-note, .today-nums span { font-family: var(--sans); font-stretch: 100%; font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+.card-note { color: var(--text-3); font-weight: 500; }
+.kpi-label { color: var(--text-3); }
+.kpi-value, .today-nums b, .pv-kpis b, .detail-stats div b { font-family: var(--sans); font-stretch: 100%; font-weight: 300; letter-spacing: -.04em; }
+.kpi-value { font-size: clamp(30px, 3vw, 42px); }
+.today { padding: 18px 0; border-top: 3px solid var(--text); border-bottom: 1px solid var(--border); }
+.today-chip { font-family: var(--sans); font-stretch: 100%; font-weight: 700; letter-spacing: .12em; font-size: 12px; padding: 8px 12px; }
+.today-chip.neutral { background: var(--text); }
+.col-data { padding: 24px 32px; border-right: 1px solid var(--text); }
+.col-chat { background: #fff; }
+.easybar-track, .race-track { border-radius: 0; height: 8px; background: var(--surface-2); border: 0; }
+.easybar-fill, .race-fill { border-radius: 0; }
+.zone-bar, .route-wrap { border-radius: 0; }
+.route-wrap { background: #fff; border-color: var(--text); }
+.route-line { stroke-width: 1.5; }
+.steps li { border-top-color: var(--text); }
+.steps li::before { font-family: var(--mono); font-stretch: 100%; font-weight: 400; }
+.runs th { font-family: var(--sans); letter-spacing: .12em; font-weight: 600; color: var(--text); border-bottom-color: var(--text); }
+.coach-reading { border-left-width: 1px; }
+.msg.assistant { background: var(--surface-2); border: 0; }
+.demo-banner { background: var(--surface-2); border-bottom-color: var(--border); }
+.skel::after { background: rgba(8,20,29,.04); }
+.tip-bubble { box-shadow: none; border-radius: 0; border-color: var(--text); }
+.kpi-value small { font-family: var(--sans); font-weight: 400; letter-spacing: 0; }
+.msg.assistant, .msg.user { border-radius: 0; }
+.hero .topo { stroke: rgba(36,92,130,.14); stroke-width: .6; }
+.pv-kpis b { font-size: clamp(28px, 3vw, 38px); }

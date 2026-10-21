@@ -277,7 +277,7 @@ function render() {
       labels: weeks.map((w) => label(w.week)),
       datasets: [{
         label: 'Hours', data: weeks.map((w) => w.hours),
-        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.82)')),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : (css('--bar-strong') || 'rgba(32,29,22,.82)'))),
         borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
       }],
     },
@@ -301,7 +301,7 @@ function render() {
       labels: weeks.map((w) => label(w.week)),
       datasets: [{
         label: 'D+', data: weeks.map((w) => w.dplus),
-        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : 'rgba(32,29,22,.38)')),
+        backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? css('--brand') : (css('--bar-soft') || 'rgba(32,29,22,.38)'))),
         borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: 'bottom', maxBarThickness: 30,
       }],
     },
