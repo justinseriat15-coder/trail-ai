@@ -911,6 +911,7 @@ async function send(text) {
       const data = await r.json();
       typing.remove();
       if (!r.ok) { steps.remove(); throw new Error(data.error || `Error ${r.status}`); }
+      if (!data.reply || !data.reply.trim()) { steps.remove(); throw new Error('The coach did not return an answer. Please try again.'); }
       (data.steps || []).forEach((label) => steps.add(label));
       steps.finish();
       state.chat.push({ role: 'assistant', content: data.reply });
@@ -932,8 +933,15 @@ async function send(text) {
       });
       typing.remove();
       if (bubble) bubble.classList.remove('streaming');
-      if (!answer.text) steps.remove(); else steps.finish();
-      if (answer.error) throw new Error(answer.error);
+      if (answer.error) { steps.remove(); if (bubble) bubble.remove(); throw new Error(answer.error); }
+      if (!answer.text || !answer.text.trim()) {
+        // Never store or show an empty assistant turn: it would break every
+        // later message in this conversation.
+        steps.remove();
+        if (bubble) bubble.remove();
+        throw new Error('The coach did not return an answer. Please try again.');
+      }
+      steps.finish();
       state.chat.push({ role: 'assistant', content: answer.text });
       if (bubble) bubble.innerHTML = renderMarkdown(answer.text);
       else addMsg('assistant', answer.text);
@@ -942,7 +950,8 @@ async function send(text) {
   } catch (e) {
     typing.remove();
     steps.remove();
-    state.chat.pop();
+    state.chat.pop(); // the failed user turn leaves the history so a retry is a clean alternation
+    $('chat-text').value = text; // put the question back for a one-tap retry
     addMsg('assistant', e.message, true);
   } finally {
     busy = false;
