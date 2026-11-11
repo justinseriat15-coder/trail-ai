@@ -915,7 +915,8 @@ async function send(text) {
       (data.steps || []).forEach((label) => steps.add(label));
       steps.finish();
       state.chat.push({ role: 'assistant', content: data.reply });
-      addMsg('assistant', data.reply);
+      const m = addMsg('assistant', data.reply);
+      if (data.paused) m.classList.add('paused');
       if (data.model) $('chat-model').textContent = data.model;
     } else {
       let bubble = null;
@@ -934,6 +935,7 @@ async function send(text) {
       typing.remove();
       if (bubble) bubble.classList.remove('streaming');
       if (answer.error) { steps.remove(); if (bubble) bubble.remove(); throw new Error(answer.error); }
+      if (answer.type === 'paused') answer.text = answer.text || '';
       if (!answer.text || !answer.text.trim()) {
         // Never store or show an empty assistant turn: it would break every
         // later message in this conversation.
@@ -944,7 +946,8 @@ async function send(text) {
       steps.finish();
       state.chat.push({ role: 'assistant', content: answer.text });
       if (bubble) bubble.innerHTML = renderMarkdown(answer.text);
-      else addMsg('assistant', answer.text);
+      else bubble = addMsg('assistant', answer.text);
+      if (answer.type === 'paused' && bubble) bubble.classList.add('paused');
       if (answer.model) $('chat-model').textContent = answer.model;
     }
   } catch (e) {
@@ -1007,7 +1010,7 @@ async function readCoachStream(body, { onStep, onDelta } = {}) {
       try { obj = JSON.parse(line.slice(6)); } catch { continue; }
       if (obj.type === 'step') onStep?.(obj.label);
       else if (obj.type === 'delta') onDelta?.(obj.text);
-      else if (obj.type === 'reply' || obj.type === 'error') answer = obj;
+      else if (obj.type === 'reply' || obj.type === 'error' || obj.type === 'paused') answer = obj;
     }
   }
   return answer;
