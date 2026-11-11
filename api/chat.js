@@ -129,3 +129,5 @@ export default handler(['POST'], async (req, res) => {
     json(res, 502, { error: 'The AI coach is currently unavailable.' });
   }
 });
+
+// The pre-merge grounding gate (.github/workflows/eval-grounding.yml) must pass on PRs touching this file.
