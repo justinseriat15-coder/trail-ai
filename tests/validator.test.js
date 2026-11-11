@@ -6,6 +6,7 @@
 //     they are the documented gap list, reviewed on every gate run.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ungroundedNumbers } from './eval-grounding.test.js';
 
 // A corpus as the eval builds it: data-section numbers + tool results,
@@ -59,4 +60,20 @@ test('UNCAUGHT (known limit): prescribed advice numbers in the closing blocks ar
   const reply = 'Your load is +21% vs usual, ease off.\n\nDo 37 minutes very easy tomorrow.';
   const bad = ungroundedNumbers(reply, CORPUS);
   assert.deepEqual(bad, []);
+});
+
+// --- demo cost guardrails (owner decision 2026-11-11) ---
+
+test('demo per-IP limit is 20 questions per day, global 300/day kept', () => {
+  const src = readFileSync(new URL('../api/chat.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('rateLimit(`demo:${ip}`, { limit: 20, windowMs: 86400_000 })'), 'per-IP 20/day');
+  assert.ok(src.includes("rateLimit('demo:global', { limit: 300, windowMs: 86400_000 })"), 'global 300/day');
+});
+
+test('billing/credit failures pause the coach cleanly, never an error', () => {
+  const src = readFileSync(new URL('../api/chat.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('COACH_PAUSED'), 'paused copy exists');
+  assert.ok(/credit balance\|billing\|payment required/i.test(src), 'billing detection');
+  assert.ok(src.includes("{ type: 'paused', text: COACH_PAUSED }"), 'SSE paused event');
+  assert.ok(src.includes('json(res, 200, { paused: true, reply: COACH_PAUSED, model })'), 'JSON paused reply');
 });

@@ -48,7 +48,7 @@ export default handler(['POST'], async (req, res) => {
   const ctx = await loadAthlete(req, res, source);
   const ip = clientIp(req);
   const rl = ctx.mode === 'demo'
-    ? rateLimit(`demo:${ip}`, { limit: 15, windowMs: 3600_000 })
+    ? rateLimit(`demo:${ip}`, { limit: 20, windowMs: 86400_000 })
     : rateLimit(`live:${ctx.athlete?.id}`, { limit: 80, windowMs: 3600_000 });
   if (!rl.ok) return json(res, 429, { error: `Limit reached, try again in ${Math.ceil(rl.retryAfter / 60)} min.` });
   if (ctx.mode === 'demo' && !rateLimit('demo:global', { limit: 300, windowMs: 86400_000 }).ok) {
@@ -86,6 +86,16 @@ export default handler(['POST'], async (req, res) => {
   const startedAt = Date.now();
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // Anthropic rejects with a billing/credit message when prepaid credit runs
+  // out. Visitors must never see that: the coach pauses cleanly and the
+  // dashboard keeps working. Detected on the error message (the API signals
+  // it as a 400 invalid_request_error naming the credit balance).
+  const COACH_PAUSED = 'The coach is taking a short break - the dashboard below keeps working, so feel free to explore it in the meantime.';
+  const isBillingError = (e) => {
+    const msg = `${e?.error?.error?.message || ''} ${e?.message || ''}`;
+    return /credit balance|billing|payment required/i.test(msg);
+  };
+
   if ((req.headers.accept || '').includes('text/event-stream')) {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -101,8 +111,9 @@ export default handler(['POST'], async (req, res) => {
       send({ type: 'reply', text: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
     } catch (e) {
       console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
-      logMetrics(false, startedAt, null, { error_type: e?.error?.error?.type || e?.name });
-      send({ type: 'error', error: 'The AI coach is currently unavailable.' });
+      logMetrics(false, startedAt, null, { error_type: e?.error?.error?.type || e?.name, billing: isBillingError(e) || undefined });
+      if (isBillingError(e)) send({ type: 'paused', text: COACH_PAUSED });
+      else send({ type: 'error', error: 'The AI coach is currently unavailable.' });
     }
     return res.end();
   }
@@ -113,7 +124,8 @@ export default handler(['POST'], async (req, res) => {
     json(res, 200, { reply: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
   } catch (e) {
     console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
-    logMetrics(false, startedAt, null, { error_type: e?.error?.error?.type || e?.name });
+    logMetrics(false, startedAt, null, { error_type: e?.error?.error?.type || e?.name, billing: isBillingError(e) || undefined });
+    if (isBillingError(e)) return json(res, 200, { paused: true, reply: COACH_PAUSED, model });
     json(res, 502, { error: 'The AI coach is currently unavailable.' });
   }
 });
