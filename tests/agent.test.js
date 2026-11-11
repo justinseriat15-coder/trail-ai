@@ -139,15 +139,27 @@ test('one round trip: tool result goes back and the answer comes out', async () 
 });
 
 test('the 8-call cap: a model that never stops is cut off, final call has no tools', async () => {
-  const client = mockClient([() => toolUse('compute_stats', { metric: 'summary' })]);
+  const calls = [];
+  const client = { calls, messages: { create: async (req) => {
+    calls.push(req);
+    return calls.length < 8 ? toolUse('compute_stats', { metric: 'summary' }) : text('Forced answer without tools.');
+  } } };
   const out = await runCoachAgent({
     client, model: 'm', system: 's', ctx: demoCtx(),
     messages: [{ role: 'user', content: 'Loop forever please' }],
   });
   assert.equal(out.calls, 8);
-  assert.equal(client.calls.length, 8);
-  for (const c of client.calls.slice(0, 7)) assert.ok(c.tools, 'tools offered before the final call');
-  assert.equal(client.calls[7].tools, undefined, 'final call is made without tools');
+  assert.equal(calls.length, 8);
+  for (const c of calls.slice(0, 7)) assert.ok(c.tools, 'tools offered before the final call');
+  assert.equal(calls[7].tools, undefined, 'final call is made without tools');
+  assert.equal(out.reply, 'Forced answer without tools.');
+});
+
+test('a model that still calls a tool on the forced final call errors instead of an empty reply', async () => {
+  const client = mockClient([() => toolUse('compute_stats', { metric: 'summary' })]);
+  await assert.rejects(
+    runCoachAgent({ client, model: 'm', system: 's', ctx: demoCtx(), messages: [{ role: 'user', content: 'Loop forever please' }] }),
+    /empty reply/);
 });
 
 test('a direct answer uses no tool and costs one call', async () => {
@@ -264,4 +276,134 @@ test('race target comes from the RACE_TARGET env var, server-side only; bad JSON
   assert.equal(envRace({}), null);
   assert.equal(envRace({ RACE_TARGET: 'not json' }), null);
   assert.equal(envRace({ RACE_TARGET: '{"km":50}' }), null);
+});
+
+// --- thinking models (claude-sonnet-5-5): budget, starvation, recovery ---
+
+import { validate } from '../api/chat.js';
+
+const thinking = (t = 'let me think') => ({ type: 'thinking', thinking: t, signature: 'sig' });
+
+test('thinking blocks ride the loop: echoed back verbatim, never in the reply', async () => {
+  const client = mockClient([
+    () => ({ stop_reason: 'tool_use', content: [thinking(), { type: 'tool_use', id: 'tu_1', name: 'compute_stats', input: { metric: 'summary' } }] }),
+    () => ({ stop_reason: 'end_turn', content: [thinking('wrapping up'), { type: 'text', text: 'Load is 33% up. Cut back.' }] }),
+  ]);
+  const out = await runCoachAgent({
+    client, model: 'claude-sonnet-5-5', system: 's', ctx: demoCtx(),
+    messages: [{ role: 'user', content: 'How is my load?' }],
+  });
+  assert.equal(out.reply, 'Load is 33% up. Cut back.');
+  assert.ok(!out.reply.includes('let me think') && !out.reply.includes('wrapping up'));
+  const convo = client.calls[1].messages;
+  assert.equal(convo.at(-2).role, 'assistant');
+  assert.deepEqual(convo.at(-2).content[0], thinking(), 'thinking block preserved verbatim for the next call');
+  assert.equal(convo.at(-1).content[0].type, 'tool_result');
+});
+
+test('coach defaults: medium effort, thinking between tools, 4096 token budget', async () => {
+  const client = mockClient([() => text('ok')]);
+  await runCoachAgent({ client, model: 'm', system: 's', ctx: demoCtx(), messages: [{ role: 'user', content: 'hi' }] });
+  assert.equal(client.calls[0].max_tokens, 4096);
+  assert.deepEqual(client.calls[0].output_config, { effort: 'medium' });
+  assert.deepEqual(client.calls[0].thinking, { type: 'between_tools' });
+});
+
+test('max_tokens with thinking-only content retries once with double budget', async () => {
+  const client = mockClient([
+    () => ({ stop_reason: 'max_tokens', content: [thinking()] }), // starved: zero text
+    () => text('Recovered answer.'),
+  ]);
+  const out = await runCoachAgent({
+    client, model: 'm', system: 's', ctx: demoCtx(),
+    messages: [{ role: 'user', content: 'Hard question' }],
+  });
+  assert.equal(out.reply, 'Recovered answer.');
+  assert.equal(client.calls.length, 2);
+  assert.equal(client.calls[0].max_tokens, 4096);
+  assert.equal(client.calls[1].max_tokens, 8192, 'retry doubles the budget, capped');
+  // the truncated turn was NOT echoed into the conversation
+  assert.equal(client.calls[1].messages.length, 1);
+});
+
+test('max_tokens starvation at the cap is an explicit error, never an empty reply', async () => {
+  const client = mockClient([() => ({ stop_reason: 'max_tokens', content: [thinking()] })]);
+  await assert.rejects(
+    runCoachAgent({ client, model: 'm', system: 's', ctx: demoCtx(), messages: [{ role: 'user', content: 'Hard question' }] }),
+    /token budget/);
+  assert.equal(client.calls.length, 2, 'one bounded retry, no loop');
+});
+
+test('an end_turn with no text is an explicit error, never an empty reply', async () => {
+  const client = mockClient([() => ({ stop_reason: 'end_turn', content: [thinking()] })]);
+  await assert.rejects(
+    runCoachAgent({ client, model: 'm', system: 's', ctx: demoCtx(), messages: [{ role: 'user', content: 'Hi' }] }),
+    /empty reply/);
+});
+
+// --- validate(): repair broken histories instead of rejecting them ---
+
+test('validate passes a normal alternating conversation unchanged', () => {
+  const msgs = [
+    { role: 'user', content: 'q1' },
+    { role: 'assistant', content: 'a1' },
+    { role: 'user', content: 'q2' },
+  ];
+  assert.deepEqual(validate(msgs), msgs);
+});
+
+test('validate recovers a history with a stranded empty assistant turn', () => {
+  // the exact state the bug left behind: blank assistant turn between two user turns
+  const out = validate([
+    { role: 'user', content: 'Am I ready for my race?' },
+    { role: 'assistant', content: '' },
+    { role: 'user', content: 'How does my load compare to usual?' },
+  ]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].role, 'user');
+  assert.match(out[0].content, /Am I ready for my race\?/);
+  assert.match(out[0].content, /How does my load compare to usual\?/);
+});
+
+test('validate drops blank/invalid turns and leading assistant turns', () => {
+  const out = validate([
+    { role: 'assistant', content: 'welcome' },
+    { role: 'user', content: '   ' },
+    { role: 'user', content: 'real question' },
+  ]);
+  assert.deepEqual(out, [{ role: 'user', content: 'real question' }]);
+});
+
+test('validate still requires a user message to end on and caps length', () => {
+  assert.throws(() => validate([{ role: 'user', content: 'q' }, { role: 'assistant', content: 'a' }]), /Last message must be from the user/);
+  assert.throws(() => validate([{ role: 'user', content: 'x'.repeat(2001) }]), /too long/);
+  assert.throws(() => validate([]), /messages required/);
+  assert.throws(() => validate('nope'), /messages required/);
+});
+
+test('models that reject effort/thinking knobs are retried without them, once per process', async () => {
+  const calls = [];
+  const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
+  const client = { calls, messages: { create: async (req) => {
+    calls.push(req);
+    if (req.output_config) throw bad('This model does not support the effort parameter.');
+    if (req.thinking) throw bad('"thinking.type.between_tools" is not supported for this model.');
+    return text('Plain answer.');
+  } } };
+  const out = await runCoachAgent({
+    client, model: 'haiku-test-double', system: 's', ctx: demoCtx(),
+    messages: [{ role: 'user', content: 'Hi' }],
+  });
+  assert.equal(out.reply, 'Plain answer.');
+  assert.ok(calls[0].output_config && calls[0].thinking);
+  assert.ok(!calls[1].output_config && calls[1].thinking);
+  assert.ok(!calls[2].output_config && !calls[2].thinking);
+  // remembered for the rest of the process: next question sends no knobs at all
+  const out2 = await runCoachAgent({
+    client, model: 'haiku-test-double', system: 's', ctx: demoCtx(),
+    messages: [{ role: 'user', content: 'Again' }],
+  });
+  assert.equal(out2.reply, 'Plain answer.');
+  assert.equal(calls.length, 4);
+  assert.ok(!calls[3].output_config && !calls[3].thinking);
 });
