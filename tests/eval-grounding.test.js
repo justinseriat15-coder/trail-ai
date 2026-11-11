@@ -266,13 +266,13 @@ for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
     // (a) tool behaviour
     const called = out.steps.map((s) => s.tool);
     if (tools.length === 0) {
-      assert.equal(called.length, 0, `expected no tool call, got ${called.join(', ')}; reply: ${out.reply?.slice(0, 160)}`);
+      assert.equal(called.length, 0, `expected no tool call, got ${called.join(', ')}; reply: ${out.reply?.slice(0, 400)}`);
     } else if (allowNone) {
       assert.ok(called.every((t) => tools.includes(t)),
-        `expected no tools or only ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 160)}`);
+        `expected no tools or only ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 400)}`);
     } else {
       assert.ok(called.some((t) => tools.includes(t)),
-        `expected one of ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 160)}`);
+        `expected one of ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 400)}`);
     }
 
     // (b) numeric grounding. Corpus = numbers from the prompt's DATA sections
@@ -320,7 +320,7 @@ for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
     if (period) {
       const cited = [...out.reply.matchAll(/\b(\d{4})-(\d{2})-\d{2}\b/g)].map((m) => `${m[1]}-${m[2]}`);
       const outside = cited.filter((ym) => ym !== period);
-      assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 400)}`);
+      assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 1500)}`);
     }
 
     // Strict: EVERY number in the reply must be grounded in the corpus (the
