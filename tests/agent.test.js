@@ -218,7 +218,7 @@ test('step labels are built from tool name + inputs', () => {
 test('system prompt advertises the tools and states the coverage boundary', () => {
   const p = buildSystemPrompt(demoCtx());
   for (const t of ['list_activities', 'get_activity_details', 'compute_stats']) assert.ok(p.includes(t), t);
-  assert.match(p, /Never assume data you have not retrieved/);
+  assert.match(p, /Never estimate, reconstruct or invent figures/);
 });
 
 test('ATHLETE_CONTEXT never reaches the prompt in demo or for non-owners', () => {
