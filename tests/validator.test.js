@@ -100,3 +100,17 @@ test('cost cap: no paid call starts when the measured worst case exceeds the cap
   );
   assert.equal(paidCalls, 0, 'no paid call may start once the cap cannot fit its worst case');
 });
+
+test('zone labels are labels, not data claims; figures around them still checked', () => {
+  // Regression for CI run #1 (2026-11-11): a correct "stayed in Z2" read from
+  // the profile's zone table failed because any session dated on the 2nd of a
+  // month evicts 2 from the corpus as a calendar number. Zone references are
+  // labels like "Week 3"; the checkable claim is the HR figure next to them.
+  const good = ungroundedNumbers('HR 147 average, so you stayed in Z2 for the average; 20.4 km in 2h17.', [147, 20.4, 137]);
+  assert.deepEqual(good, []);
+  const bad = ungroundedNumbers('HR 147 average (Z2), but you ran 21.1 km.', [147, 20.4, 137]);
+  assert.deepEqual(bad, [21.1]);
+  // A combined range label is also a label.
+  const range = ungroundedNumbers('68.8% of time in Z1-Z2.', [68.8]);
+  assert.deepEqual(range, []);
+});

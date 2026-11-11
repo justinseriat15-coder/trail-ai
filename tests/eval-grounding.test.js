@@ -61,9 +61,15 @@ function normalize(text) {
 // Numbers as values: "5:32" -> 332 (s), "2h17" -> 137 (min), "468"/"467.7" as read.
 // Time-like tokens are consumed first (blanked out) so their components are
 // not also read as plain numbers; JSON values (":465,) parse normally.
+// Zone labels ("Z2", "Z1-Z2") are labels, not data claims - the checkable
+// claim is the underlying figure (HR 147), and JSON zone fields ("zone":2)
+// still parse normally. Blank them like "Week 3" so a correct zone reference
+// from the profile's zone table cannot fail the gate while every data number
+// around it still must be grounded.
 function numbersOf(text) {
   let t = normalize(text);
   const out = [];
+  t = t.replace(/\bZ(\d)(?:\s*[-\u2013]\s*Z?\d)?/gi, (m) => ' '.repeat(m.length));
   t = t.replace(/(\d{1,2})h(\d{2})/g, (m, h, mm) => { out.push((+h) * 60 + (+mm)); return ' '.repeat(m.length); });
   t = t.replace(/(\d{1,2}):(\d{2})(?::(\d{2}))?/g, (m, a, b, c) => {
     out.push(c != null ? (+a) * 3600 + (+b) * 60 + (+c) : (+a) * 60 + (+b));
