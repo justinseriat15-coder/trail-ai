@@ -6,7 +6,7 @@
 // Every question is also checked for numeric grounding: each number in the
 // reply must appear in the system prompt, the question itself, or a tool
 // result (see tests/eval-grounding.test.js for the exact rule and its limits).
-import { demoActivities } from '../public/js/demo-data.js';
+import { demoActivities, demoActivitiesLowVolume } from '../public/js/demo-data.js';
 
 const DAY = 86400_000;
 const monthName = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -59,6 +59,37 @@ export function buildGroundingQuestions(activities = demoActivities()) {
   ];
 }
 
+// Regression set for the live grounding miss of 2026-11-11: asked about a
+// light historical month on a low-volume athlete, the production coach
+// invented a "current 60-70 km/week" comparison and speculated about causes.
+// These questions run against demoActivitiesLowVolume() so CI reproduces that
+// exact shape: historical retrieval required, and any invented current-volume
+// comparison fails the numeric gate (60/70 exist nowhere in this corpus).
+export function buildLowVolumeQuestions(activities = demoActivitiesLowVolume()) {
+  const runs = activities.filter((a) => (a.sport_type || a.type) !== 'WeightTraining');
+  const byMonth = new Map();
+  for (const a of runs) {
+    const k = String(a.start_date_local).slice(0, 7);
+    byMonth.set(k, (byMonth.get(k) || 0) + (a.distance || 0) / 1000);
+  }
+  // Lightest full month in coverage = the historical retrieval target.
+  const sorted = [...byMonth.entries()].sort((x, y) => x[1] - y[1]);
+  const lightKey = sorted[0][0];
+  const otherKey = sorted.at(-1)[0];
+  const label = (k) => monthName(`${k}-15`);
+  return [
+    { q: `What did my training look like in ${label(lightKey)}?`, tools: ['list_activities', 'compute_stats'], period: lightKey },
+    // The originally requested live question's shape, finally gated in CI:
+    { q: `Compare my climbing in ${label(lightKey)} with ${label(otherKey)}.`, tools: ['list_activities', 'compute_stats'] },
+    // Current-volume comparison: the preload holds the real current weeks
+    // (20-40 km); an invented "60-70 km/week" here is exactly what the gate
+    // must flag.
+    { q: 'How does my running volume this week compare to my usual?', tools: ['compute_stats'], allowNone: true },
+  ];
+}
+
+
 export const GROUNDING_QUESTIONS = buildGroundingQuestions();
+export const LOW_VOLUME_QUESTIONS = buildLowVolumeQuestions();
 
 // CI trigger check: verify the grounding gate runs on PRs touching the coach.

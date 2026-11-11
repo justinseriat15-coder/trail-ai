@@ -61,3 +61,32 @@ test('agent steps carry tool outputs for the grounding eval', async () => {
   assert.ok(Array.isArray(out.steps[0].output.activities), 'raw tool result kept on the step');
   assert.ok(out.steps[0].output.count >= 1);
 });
+
+test('prompt rules: context is background, data wins; no unsupported causes', () => {
+  const prompt = buildSystemPrompt(demoCtx());
+  assert.match(prompt, /never quote it as a current figure/i);
+  assert.match(prompt, /conflicts with the data, the data wins/i);
+  assert.match(prompt, /Never state a cause the data does not show/);
+  assert.ok(!/label any other explanation/.test(prompt), 'no guess escape hatch');
+});
+
+test('athlete private context is labelled background, may be stale', () => {
+  process.env.ATHLETE_CONTEXT = 'synthetic stale text';
+  const ctx = { ...demoCtx(), owner: true };
+  const prompt = buildSystemPrompt(ctx);
+  delete process.env.ATHLETE_CONTEXT;
+  assert.match(prompt, /## Athlete private context \(.*may be stale; never quote as a current figure\)/);
+});
+
+test('corpus exclusion: stale context numbers cannot ground a reply', () => {
+  // Mirrors the corpus construction in eval-grounding.test.js: the private
+  // context section is cut from the data sections before numbers are read.
+  process.env.ATHLETE_CONTEXT = 'Old plan: building 60-70 km per week toward a 60 km race.';
+  const ctx = { ...demoCtx(), owner: true };
+  const system = buildSystemPrompt(ctx);
+  delete process.env.ATHLETE_CONTEXT;
+  assert.ok(system.includes('60-70 km per week'), 'context IS in the prompt as background');
+  const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')))
+    .replace(/## Athlete private context[\s\S]*?(?=\n## |$)/, '');
+  assert.ok(!dataSections.includes('60-70 km per week'), 'context numbers excluded from the grounding corpus');
+});

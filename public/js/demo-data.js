@@ -92,6 +92,78 @@ export function demoActivities(now = new Date()) {
   return out.sort((a, b) => b.start_date_local.localeCompare(a.start_date_local));
 }
 
+// Low-volume variant for the grounding regression suite (CI only, not served
+// to demo visitors): a fictional athlete whose recent weeks sit at 20-40 km,
+// with one light historical month of a few short runs plus strength sessions.
+// Shape anonymized from a real support case in which the coach answered a
+// light-month question with an invented "current 60-70 km/week" comparison -
+// this fixture lets the gate prove that claim can never be grounded again.
+// All names, dates and figures are synthetic.
+export function demoActivitiesLowVolume(now = new Date()) {
+  const rand = mulberry32(7);
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const WEEKS = 16;
+  const out = [];
+  let id = 700000;
+  const LV_NAMES = ['Easy run', 'Morning jog', 'Lunch run', 'Easy loop', 'Park run', 'Recovery run'];
+  for (let w = WEEKS - 1; w >= 0; w--) {
+    // Oldest 4 weeks are the light month: 1-2 short runs + a strength session.
+    const light = w >= WEEKS - 4;
+    const runsThisWeek = light ? 1 + Math.floor(rand() * 2) : 3;
+    const dows = [1, 3, 6].slice(0, runsThisWeek);
+    for (const dow of dows) {
+      const d = new Date(monday); d.setDate(d.getDate() - w * 7 + dow);
+      if (d > today) continue;
+      d.setHours(18, Math.floor(rand() * 50), 0, 0);
+      const kmRun = light ? 3.5 + rand() * 4 : 6 + rand() * 9;
+      const minutes = kmRun * (5.6 + rand() * 1.2);
+      const hr = 138 + rand() * 22;
+      const dplus = 30 + rand() * 120;
+      const moving = Math.round(minutes * 60);
+      out.push({
+        id: id++,
+        name: LV_NAMES[Math.floor(rand() * LV_NAMES.length)],
+        type: 'Run', sport_type: 'Run',
+        start_date_local: toLocalIso(d),
+        distance: Math.round(kmRun * 1000),
+        moving_time: moving,
+        elapsed_time: moving + Math.round(rand() * 180),
+        average_speed: +(kmRun * 1000 / moving).toFixed(3),
+        average_heartrate: +hr.toFixed(1),
+        max_heartrate: Math.round(hr + 12 + rand() * 14),
+        total_elevation_gain: Math.round(dplus),
+        _kind: 'easy',
+        _drift: 0.03 + rand() * 0.02,
+      });
+    }
+    if (light && rand() < 0.75) {
+      const d = new Date(monday); d.setDate(d.getDate() - w * 7 + 4);
+      if (d <= today) {
+        d.setHours(19, Math.floor(rand() * 40), 0, 0);
+        const moving = Math.round((19 + rand() * 3) * 60);
+        out.push({
+          id: id++,
+          name: 'Strength session',
+          type: 'WeightTraining', sport_type: 'WeightTraining',
+          start_date_local: toLocalIso(d),
+          distance: 0,
+          moving_time: moving,
+          elapsed_time: moving,
+          average_speed: 0,
+          average_heartrate: +(105 + rand() * 12).toFixed(1),
+          max_heartrate: 0,
+          total_elevation_gain: 0,
+          _kind: 'strength',
+          _drift: 0,
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => b.start_date_local.localeCompare(a.start_date_local));
+}
+
 function toLocalIso(d) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00Z`;

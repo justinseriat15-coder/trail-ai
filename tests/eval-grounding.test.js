@@ -23,8 +23,8 @@ import assert from 'node:assert/strict';
 import Anthropic from '@anthropic-ai/sdk';
 import { runCoachAgent } from '../lib/agent.js';
 import { buildSystemPrompt } from '../lib/coach.js';
-import { demoActivities } from '../public/js/demo-data.js';
-import { GROUNDING_QUESTIONS } from './eval-grounding-questions.mjs';
+import { demoActivities, demoActivitiesLowVolume } from '../public/js/demo-data.js';
+import { GROUNDING_QUESTIONS, LOW_VOLUME_QUESTIONS } from './eval-grounding-questions.mjs';
 
 const KEY = process.env.ANTHROPIC_API_KEY;
 const opts = { skip: !KEY };
@@ -38,7 +38,10 @@ const PRICES = { 'claude-sonnet-5-5': { in: 2e-6, cache: 0.1e-6, out: 10e-6 } };
 // input is measured with the free token-count endpoint, priced uncached, plus
 // that call's full max_tokens output; the call only starts if the measured
 // worst case fits the remaining cap. There is no assumed input size.
-const COST_CAP = Number(process.env.EVAL_COST_CAP_USD ?? '2.00');
+import { EVAL_BUDGET_CAP_USD } from './eval-budget.mjs';
+// The workflow env var is a hard ceiling; the checked-in budget can only
+// tighten it (see tests/eval-budget.mjs). Effective cap is the lower of both.
+const COST_CAP = Math.min(Number(process.env.EVAL_COST_CAP_USD ?? '2.00'), EVAL_BUDGET_CAP_USD ?? Infinity);
 const costBudget = { spent: 0, capUsd: COST_CAP, priceIn: 2e-6, priceOut: 10e-6 };
 let spent = 0; // mirror for reporting; costBudget.spent is the enforced value
 function costOf(model, u = {}) {
@@ -66,7 +69,7 @@ function normalize(text) {
 // still parse normally. Blank them like "Week 3" so a correct zone reference
 // from the profile's zone table cannot fail the gate while every data number
 // around it still must be grounded.
-function numbersOf(text) {
+export function numbersOf(text) {
   let t = normalize(text);
   const out = [];
   t = t.replace(/\bZ(\d)(?:\s*[-\u2013]\s*Z?\d)?/gi, (m) => ' '.repeat(m.length));
@@ -88,7 +91,11 @@ function calendarNumbers(text) {
   const out = new Set();
   const add = (v) => { if (v != null) out.add(Number(v)); };
   for (const m of t.matchAll(/(\d{4})-(\d{2})-(\d{2})/g)) { add(m[1]); add(m[2]); add(m[3]); }
-  for (const m of t.matchAll(/(?<!\d)(\d{2})-(\d{2})(?!\d)/g)) { add(m[1]); add(m[2]); } // MM-DD
+  // MM-DD dates only: a valid month and day, and not a quantity range.
+  // "60-70 km/week" or "143-148 bpm" are TWO data claims, not a date -
+  // treating hyphenated ranges as calendar numbers let an invented
+  // "60-70 km/week" pass ungrounded in production on 2026-11-11.
+  for (const m of t.matchAll(/(?<!\d)(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?!\d)(?!\s*(?:km|m|min|bpm|h|%|\/))/g)) { add(m[1]); add(m[2]); } // MM-DD
   // Month name followed by a day list: "Sept 7, 14, 21 and 28", "Aug 5-11".
   for (const m of t.matchAll(new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+((?:\\d{1,2}\\s*(?:,|\\u2013|-|and)?\\s*)+)`, 'gi'))) {
     for (const d of m[1].matchAll(/\d{1,2}/g)) add(d[0]);
@@ -101,6 +108,27 @@ function calendarNumbers(text) {
   // Spans of time are framing, not data claims: "a strict 14-day window", "over 6 weeks".
   for (const m of t.matchAll(/(\d{1,3})[- ](?:day|days|week|weeks)\b/gi)) add(m[1]);
   return out;
+}
+
+// Corpus-side mirror of calendarNumbers: removes the exact spans that are
+// calendar expressions, so numbersOf never sees date digits. The corpus must
+// NOT be built by evicting VALUES that collide with a calendar number: that
+// evicted a genuine 'Load vs usual: -5%' from the corpus whenever a week
+// starting on the 5th (2026-10-05) appeared in the data, and the gate then
+// failed a correctly quoted figure (CI run 43013295670, 2026-11-11).
+export function stripCalendar(text) {
+  let t = normalize(text);
+  t = t.replace(/\d{4}-\d{2}-\d{2}/g, ' '); // ISO dates
+  // Full month-name dates incl. year first, so '3 September 2026' goes whole.
+  t = t.replace(new RegExp(`(?:\\d{1,2}\\s+)?(?:${MONTHS})[a-z]*\\.?\\s+(?:\\d{1,2},?\\s+)?\\d{4}`, 'gi'), ' ');
+  t = t.replace(new RegExp(`\\d{4}\\s+(?:${MONTHS})[a-z]*`, 'gi'), ' ');
+  // Month name followed by a day list: 'Sept 7, 14, 21 and 28', 'Aug 5-11'.
+  t = t.replace(new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+(?:\\d{1,2}\\s*(?:,|\\u2013|-|and)?\\s*)+`, 'gi'), ' ');
+  t = t.replace(new RegExp(`\\d{1,2}\\s+(?:${MONTHS})[a-z]*`, 'gi'), ' ');
+  t = t.replace(/(?<!\d)(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?!\d)(?!\s*(?:km|m|min|bpm|h|%|\/))/g, ' '); // MM-DD
+  t = t.replace(/\bWeek\s+\d{1,2}\b/gi, ' ');
+  t = t.replace(/\d{1,3}[- ](?:day|days|week|weeks)\b/gi, ' ');
+  return t;
 }
 
 // Aggregates a coach may legitimately derive from a retrieved activity list:
@@ -155,31 +183,85 @@ function addAggregates(corpus, output) {
   }
 }
 
-export function ungroundedNumbers(reply, corpusValues, { exemptTail = true } = {}) {
-  // The prompt requires ending with an actionable recommendation, so the
-  // closing advice blocks (up to two trailing paragraphs) are exempt:
-  // prescribed numbers there ("hold 45-75 min easy") are advice, not data
-  // claims. Single-block replies are data claims throughout and fully checked.
+// The prompt requires ending with an actionable recommendation, so the
+// closing advice blocks (up to two trailing paragraphs) are exempt from data
+// assertions: prescribed numbers there ("hold 45-75 min easy") and dates cited
+// for forward-looking advice ("your last run on 2026-11-10 averaged HR 154")
+// are advice grounded in current data, not claims about the asked period.
+// Single-block replies are data claims throughout and fully checked.
+export function checkedBody(reply, { exemptTail = true } = {}) {
   const blocks = reply.split(/\n\s*\n/);
   const exempt = exemptTail ? Math.min(2, blocks.length - 1) : 0;
-  const body = blocks.slice(0, blocks.length - exempt).join('\n\n');
+  return blocks.slice(0, blocks.length - exempt).join('\n\n');
+}
+
+export function ungroundedNumbers(reply, corpusValues, { exemptTail = true } = {}) {
+  const body = checkedBody(reply, { exemptTail });
   const calendar = calendarNumbers(body);
   return numbersOf(body).filter((n) => !calendar.has(n) && !corpusValues.some((c) => Math.abs(n - c) <= Math.max(0.51, 0.01 * Math.abs(n))));
 }
 
+// Dates cited outside the asked period, restricted to the checked body: the
+// period assertion exists to catch a neighbouring month's weeks folded into
+// the period's account, which happens in the analysis, not in closing advice.
+export function outsidePeriodDates(reply, period) {
+  const cited = [...checkedBody(reply).matchAll(/\b(\d{4})-(\d{2})-\d{2}\b/g)].map((m) => `${m[1]}-${m[2]}`);
+  return cited.filter((ym) => ym !== period);
+}
+
 // --- the gate ------------------------------------------------------------
 
-const activities = demoActivities();
-const ctx = {
-  mode: 'demo', owner: false,
-  athlete: { firstname: 'Demo athlete' },
-  profile: { hrMax: 196, hrRest: 48 },
-  activities,
-};
-const system = buildSystemPrompt(ctx);
+// Two gated fixtures: the public demo athlete, and the low-volume synthetic
+// athlete from the 2026-11-11 live grounding miss (invented "current 60-70
+// km/week" on a light-month question). Both run the same strict assertions.
+const FIXTURES = [
+  {
+    tag: 'demo',
+    questions: GROUNDING_QUESTIONS,
+    ctx: {
+      mode: 'demo', owner: false,
+      athlete: { firstname: 'Demo athlete' },
+      profile: { hrMax: 196, hrRest: 48 },
+      activities: demoActivities(),
+    },
+  },
+  {
+    tag: 'low-volume',
+    questions: LOW_VOLUME_QUESTIONS,
+    ctx: {
+      mode: 'demo', owner: false,
+      athlete: { firstname: 'Demo athlete' },
+      profile: { hrMax: 192, hrRest: 52 },
+      activities: demoActivitiesLowVolume(),
+    },
+  },
+  {
+    // Regression for the 2026-11-11 live miss: owner-mode prompt carrying a
+    // STALE synthetic private context ("60-70 km per week") over a low-volume
+    // athlete. The gate must fail any reply quoting the stale figure, because
+    // the corpus no longer admits private-context numbers. Synthetic text
+    // only - the owner's real context never enters the repo or CI logs.
+    // mode stays 'demo' so tools read ctx.activities deterministically; the private context is
+    // included because owner is true. In live mode the tools fetch via
+    // ctx.session, which does not exist under test.
+    tag: 'low-volume-stale-context',
+    questions: LOW_VOLUME_QUESTIONS,
+    staleContext: 'Background from the April build: building 60-70 km per week toward the Guerande 60 km in June. Old knee niggle on long descents. Goal: finish under 9 h.',
+    ctx: {
+      mode: 'demo', owner: true,
+      athlete: { firstname: 'Demo athlete' },
+      profile: { hrMax: 192, hrRest: 52 },
+      activities: demoActivitiesLowVolume(),
+    },
+  },
+];
 
-for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS) {
-  test(`grounding [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
+for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
+  if (staleContext) process.env.ATHLETE_CONTEXT = staleContext;
+  const system = buildSystemPrompt(ctx);
+  if (staleContext) delete process.env.ATHLETE_CONTEXT;
+  for (const { q, tools, allowNone = false, period = null } of questions) {
+  test(`grounding(${tag}) [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
     const client = new Anthropic({ apiKey: KEY });
     if (costBudget.spent >= COST_CAP) {
       assert.fail(`cost cap $${COST_CAP} already reached ($${costBudget.spent.toFixed(4)}); refusing further paid calls`);
@@ -201,13 +283,13 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
     // (a) tool behaviour
     const called = out.steps.map((s) => s.tool);
     if (tools.length === 0) {
-      assert.equal(called.length, 0, `expected no tool call, got ${called.join(', ')}; reply: ${out.reply?.slice(0, 160)}`);
+      assert.equal(called.length, 0, `expected no tool call, got ${called.join(', ')}; reply: ${out.reply?.slice(0, 400)}`);
     } else if (allowNone) {
       assert.ok(called.every((t) => tools.includes(t)),
-        `expected no tools or only ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 160)}`);
+        `expected no tools or only ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 400)}`);
     } else {
       assert.ok(called.some((t) => tools.includes(t)),
-        `expected one of ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 160)}`);
+        `expected one of ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 400)}`);
     }
 
     // (b) numeric grounding. Corpus = numbers from the prompt's DATA sections
@@ -219,16 +301,20 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
     // via the calendar-date exemption), and numbers that appear in the corpus
     // only inside date strings (a '03' in 2026-09-03 must not ground a
     // fabricated '3 sessions').
-    const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')));
-    const dataCal = calendarNumbers(dataSections);
-    const corpus = numbersOf(dataSections).filter((n) => !dataCal.has(n));
+    // Athlete private context is background that may be stale: its numbers
+    // must never ground a reply. Excluded from the corpus like the BASE text -
+    // a stale "60-70 km/week" there grounded the exact live miss of
+    // 2026-11-11, because the section sits inside the data sections.
+    const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')))
+      .replace(/## Athlete private context[\s\S]*?(?=\n## |$)/, '');
+    const corpus = numbersOf(stripCalendar(dataSections));
     // Metric DEFINITIONS and tool-description constants (the 50 m+/3% climb
     // rule, the ~80% easy target, the -10%/+15% load band, 120-day windows) are
     // legitimately quoted from the prompt/tool docs, not from data. Admitted
     // only at >= 10 so small integers cannot coincidence-ground fabrications.
     const { TOOLS: EVAL_TOOLS } = await import('../lib/agent.js');
     const defsText = system.slice(0, Math.max(0, system.indexOf('## Profile'))) + JSON.stringify(EVAL_TOOLS.map((x) => [x.name, x.description]));
-    corpus.push(...numbersOf(defsText).filter((n) => n >= 10 && !calendarNumbers(defsText).has(n)));
+    corpus.push(...numbersOf(stripCalendar(defsText)).filter((n) => n >= 10));
     // Counts derivable from the recent-sessions list: total listed, and how
     // many fall in the trailing 7/14/28/56-day windows the metrics use.
     const todayM = system.match(/Today's date: (\d{4}-\d{2}-\d{2})/);
@@ -241,19 +327,18 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
       }
     }
     for (const s of out.steps) {
-      const outJson = JSON.stringify(s.output ?? {});
-      const outCal = calendarNumbers(outJson);
-      corpus.push(...numbersOf(JSON.stringify(s.input ?? {})).filter((n) => !calendarNumbers(JSON.stringify(s.input ?? {})).has(n)));
-      corpus.push(...numbersOf(outJson).filter((n) => !outCal.has(n)));
+      corpus.push(...numbersOf(stripCalendar(JSON.stringify(s.input ?? {}))));
+      corpus.push(...numbersOf(stripCalendar(JSON.stringify(s.output ?? {}))));
       addAggregates(corpus, s.output);
     }
     // (c) period attribution, where the question declares a month: every date
-    // or week cited in the reply must start inside that month. This catches
+    // cited in the ANALYSIS body must start inside that month. This catches
     // answers that fold a neighbouring month's weeks into the asked period.
+    // The closing advice blocks are exempt (same boundary as the numbers
+    // check): forward-looking advice legitimately cites current data.
     if (period) {
-      const cited = [...out.reply.matchAll(/\b(\d{4})-(\d{2})-\d{2}\b/g)].map((m) => `${m[1]}-${m[2]}`);
-      const outside = cited.filter((ym) => ym !== period);
-      assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 400)}`);
+      const outside = outsidePeriodDates(out.reply, period);
+      assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 1500)}`);
     }
 
     // Strict: EVERY number in the reply must be grounded in the corpus (the
@@ -263,4 +348,5 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
     const trace = out.steps.map((s) => `${s.tool}(${JSON.stringify(s.input)}) -> ${JSON.stringify(s.output)?.slice(0, 300)}`).join('\n');
     assert.deepEqual(bad, [], `ungrounded numbers in reply: ${bad.join(', ')};\ncalls: ${trace}\nreply: ${out.reply}`);
   });
+  }
 }
