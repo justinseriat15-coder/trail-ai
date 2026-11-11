@@ -87,6 +87,17 @@ npx vercel dev          # serves public/ and api/ on http://localhost:3000
 npm test
 ```
 
+## Coach changes: pre-merge gate
+
+Anything touching the coach (`lib/coach.js`, `lib/agent.js`, `api/chat.js`, the tool definitions, or the eval sets) must pass two gates before merge:
+
+```bash
+npm test                                                          # offline unit tests (also run in CI on every PR)
+ANTHROPIC_API_KEY=... npm run eval:grounding                      # live grounding eval, ~15 questions on demo data
+```
+
+The grounding eval asserts, per question: (a) the agent called the right tool for the asked period (or none when the preloaded summary covers it), and (b) every number in the answer appears in the system prompt, the question, or a tool result. Merge only when all questions pass; investigate failures, do not merge red. The numeric check is strict token matching, not semantic validation - see the header of `tests/eval-grounding.test.js` for its exact limits.
+
 ## Environment variables
 
 | Name | Required | Purpose |
