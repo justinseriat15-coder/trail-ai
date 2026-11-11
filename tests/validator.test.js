@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ungroundedNumbers } from './eval-grounding.test.js';
+import { ungroundedNumbers, numbersOf, stripCalendar } from './eval-grounding.test.js';
 
 // A corpus as the eval builds it: data-section numbers + tool results,
 // calendar-date numbers already excluded (see eval-grounding.test.js).
@@ -133,4 +133,33 @@ test('UNCAUGHT: speculative causes are textual - only their numbers are gated', 
   // mitigation, and human review of failures remains part of the gate.
   const bad = ungroundedNumbers('That points to lower fitness then, or to eating less than 2 h before running.', [158, 135]);
   assert.deepEqual(bad, [2]);
+});
+
+test('corpus building: calendar-collision no longer evicts a genuine figure', () => {
+  // CI run 43013295670 (2026-11-11) failed a correctly quoted 'Load vs usual:
+  // -5%' because the weekly-volume row for the week of 2026-10-05 put 5 into
+  // the calendar set, and the corpus filter evicted VALUES, not occurrences.
+  const dataSections = [
+    '## Load and trends',
+    'Load vs usual: -5% (-5% vs your usual: fine).',
+    '',
+    '## Weekly volume',
+    '- 2026-10-05 | 3 sessions | 3.2 h | 270 m',
+    '- 2026-09-03 | 4 sessions | 3.7 h | 324 m',
+  ].join('\n');
+  const corpus = numbersOf(stripCalendar(dataSections));
+  assert.ok(corpus.includes(5), 'genuine -5% load figure must ground');
+  assert.ok(corpus.includes(3.2) && corpus.includes(270), 'real row figures still ground');
+  const good = ungroundedNumbers('Load vs usual is -5%, which is fine.', corpus);
+  assert.deepEqual(good, []);
+});
+
+test('corpus building: date digits alone still cannot ground a fabrication', () => {
+  // The point of the old filter: a '03' inside 2026-09-03 must not ground an
+  // invented '3 sessions'. Occurrence-level stripping keeps that protection.
+  const dataSections = '## Recent sessions\n- 2026-09-03 | Easy run | 8.2 km | 51 min';
+  const corpus = numbersOf(stripCalendar(dataSections));
+  assert.ok(!corpus.includes(3), 'day 03 of a date must not enter the corpus');
+  const bad = ungroundedNumbers('You did 3 sessions that week, totalling 8.2 km.', corpus);
+  assert.deepEqual(bad, [3]);
 });

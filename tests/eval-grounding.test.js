@@ -66,7 +66,7 @@ function normalize(text) {
 // still parse normally. Blank them like "Week 3" so a correct zone reference
 // from the profile's zone table cannot fail the gate while every data number
 // around it still must be grounded.
-function numbersOf(text) {
+export function numbersOf(text) {
   let t = normalize(text);
   const out = [];
   t = t.replace(/\bZ(\d)(?:\s*[-\u2013]\s*Z?\d)?/gi, (m) => ' '.repeat(m.length));
@@ -105,6 +105,27 @@ function calendarNumbers(text) {
   // Spans of time are framing, not data claims: "a strict 14-day window", "over 6 weeks".
   for (const m of t.matchAll(/(\d{1,3})[- ](?:day|days|week|weeks)\b/gi)) add(m[1]);
   return out;
+}
+
+// Corpus-side mirror of calendarNumbers: removes the exact spans that are
+// calendar expressions, so numbersOf never sees date digits. The corpus must
+// NOT be built by evicting VALUES that collide with a calendar number: that
+// evicted a genuine 'Load vs usual: -5%' from the corpus whenever a week
+// starting on the 5th (2026-10-05) appeared in the data, and the gate then
+// failed a correctly quoted figure (CI run 43013295670, 2026-11-11).
+export function stripCalendar(text) {
+  let t = normalize(text);
+  t = t.replace(/\d{4}-\d{2}-\d{2}/g, ' '); // ISO dates
+  // Full month-name dates incl. year first, so '3 September 2026' goes whole.
+  t = t.replace(new RegExp(`(?:\\d{1,2}\\s+)?(?:${MONTHS})[a-z]*\\.?\\s+(?:\\d{1,2},?\\s+)?\\d{4}`, 'gi'), ' ');
+  t = t.replace(new RegExp(`\\d{4}\\s+(?:${MONTHS})[a-z]*`, 'gi'), ' ');
+  // Month name followed by a day list: 'Sept 7, 14, 21 and 28', 'Aug 5-11'.
+  t = t.replace(new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+(?:\\d{1,2}\\s*(?:,|\\u2013|-|and)?\\s*)+`, 'gi'), ' ');
+  t = t.replace(new RegExp(`\\d{1,2}\\s+(?:${MONTHS})[a-z]*`, 'gi'), ' ');
+  t = t.replace(/(?<!\d)(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?!\d)(?!\s*(?:km|m|min|bpm|h|%|\/))/g, ' '); // MM-DD
+  t = t.replace(/\bWeek\s+\d{1,2}\b/gi, ' ');
+  t = t.replace(/\d{1,3}[- ](?:day|days|week|weeks)\b/gi, ' ');
+  return t;
 }
 
 // Aggregates a coach may legitimately derive from a retrieved activity list:
@@ -269,15 +290,14 @@ for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
     // 2026-11-11, because the section sits inside the data sections.
     const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')))
       .replace(/## Athlete private context[\s\S]*?(?=\n## |$)/, '');
-    const dataCal = calendarNumbers(dataSections);
-    const corpus = numbersOf(dataSections).filter((n) => !dataCal.has(n));
+    const corpus = numbersOf(stripCalendar(dataSections));
     // Metric DEFINITIONS and tool-description constants (the 50 m+/3% climb
     // rule, the ~80% easy target, the -10%/+15% load band, 120-day windows) are
     // legitimately quoted from the prompt/tool docs, not from data. Admitted
     // only at >= 10 so small integers cannot coincidence-ground fabrications.
     const { TOOLS: EVAL_TOOLS } = await import('../lib/agent.js');
     const defsText = system.slice(0, Math.max(0, system.indexOf('## Profile'))) + JSON.stringify(EVAL_TOOLS.map((x) => [x.name, x.description]));
-    corpus.push(...numbersOf(defsText).filter((n) => n >= 10 && !calendarNumbers(defsText).has(n)));
+    corpus.push(...numbersOf(stripCalendar(defsText)).filter((n) => n >= 10));
     // Counts derivable from the recent-sessions list: total listed, and how
     // many fall in the trailing 7/14/28/56-day windows the metrics use.
     const todayM = system.match(/Today's date: (\d{4}-\d{2}-\d{2})/);
@@ -290,10 +310,8 @@ for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
       }
     }
     for (const s of out.steps) {
-      const outJson = JSON.stringify(s.output ?? {});
-      const outCal = calendarNumbers(outJson);
-      corpus.push(...numbersOf(JSON.stringify(s.input ?? {})).filter((n) => !calendarNumbers(JSON.stringify(s.input ?? {})).has(n)));
-      corpus.push(...numbersOf(outJson).filter((n) => !outCal.has(n)));
+      corpus.push(...numbersOf(stripCalendar(JSON.stringify(s.input ?? {}))));
+      corpus.push(...numbersOf(stripCalendar(JSON.stringify(s.output ?? {}))));
       addAggregates(corpus, s.output);
     }
     // (c) period attribution, where the question declares a month: every date
