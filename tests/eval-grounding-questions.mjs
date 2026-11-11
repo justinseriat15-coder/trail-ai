@@ -60,3 +60,5 @@ export function buildGroundingQuestions(activities = demoActivities()) {
 }
 
 export const GROUNDING_QUESTIONS = buildGroundingQuestions();
+
+// CI trigger check: verify the grounding gate runs on PRs touching the coach.
