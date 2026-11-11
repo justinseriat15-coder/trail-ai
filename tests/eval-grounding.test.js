@@ -33,8 +33,14 @@ const opts = { skip: !KEY };
 // Prices in $/token, from https://platform.claude.com/docs/en/about-claude/pricing
 // (Claude Sonnet 5.5: $2/MTok input, $0.10/MTok cache read, $10/MTok output).
 const PRICES = { 'claude-sonnet-5-5': { in: 2e-6, cache: 0.1e-6, out: 10e-6 } };
-const COST_CAP = Number(process.env.EVAL_COST_CAP_USD ?? '1.00');
+const COST_CAP = Number(process.env.EVAL_COST_CAP_USD ?? '2.00');
 let spent = 0;
+// Pre-call enforcement: a question may start only if the cap still holds even
+// when that question burns its absolute worst case - 8 model calls (MAX_CALLS,
+// incl. token-starvation retries) at the 8192-token output cap and a generous
+// 32k-token uncached input each. Cache reads are 20x cheaper, so real runs sit
+// far below; this bound is what the cap actually guarantees.
+const WORST_CASE_PER_QUESTION = 8 * (32000 * 2e-6 + 8192 * 10e-6); // ~$1.17 at Sonnet 5.5 rates
 function costOf(model, u = {}) {
   const p = PRICES[model];
   if (!p) return 0; // unknown model: cost untracked, cap ineffective (warned in output)
@@ -169,9 +175,8 @@ const system = buildSystemPrompt(ctx);
 for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS) {
   test(`grounding [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
     const client = new Anthropic({ apiKey: KEY });
-    if (spent > COST_CAP) {
-      console.log(`SKIP (cost cap $${COST_CAP} reached: $${spent.toFixed(4)}): ${q}`);
-      return;
+    if (spent + WORST_CASE_PER_QUESTION > COST_CAP) {
+      assert.fail(`cost cap $${COST_CAP} would be exceeded by the worst case of another question (spent $${spent.toFixed(4)} + worst-case $${WORST_CASE_PER_QUESTION.toFixed(2)}); refusing further paid calls`);
     }
     const model = process.env.ANTHROPIC_DEMO_MODEL || 'claude-sonnet-5-5'; // same default as demo mode in api/chat.js
     const out = await runCoachAgent({
@@ -243,18 +248,11 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
       assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 400)}`);
     }
 
+    // Strict: EVERY number in the reply must be grounded in the corpus (the
+    // preloaded summary's data sections, or a tool result, within rounding
+    // equivalence). A misquote or mis-sum is a failure, not a warning.
     const bad = ungroundedNumbers(out.reply, corpus);
-    // Two tiers: a number with NO corpus value anywhere near it (5x the base
-    // tolerance) is a hard failure - that is the fabrication class the gate
-    // exists for. A number with a near match is imprecision (mis-sum, wrong
-    // bucket, rounding): printed as a warning for human review, not a gate
-    // failure. This keeps the gate stable against stochastic near-misses while
-    // every borderline case stays visible in the run log.
-    const NEAR = 5;
-    const hard = bad.filter((n) => !corpus.some((c) => Math.abs(n - c) <= NEAR * Math.max(0.51, 0.01 * Math.abs(n))));
-    const warn = bad.filter((n) => !hard.includes(n));
-    if (warn.length) console.log(`eval-warning: imprecise numbers (near-miss, human review): ${warn.join(', ')} - ${q.slice(0, 60)}`);
     const trace = out.steps.map((s) => `${s.tool}(${JSON.stringify(s.input)}) -> ${JSON.stringify(s.output)?.slice(0, 300)}`).join('\n');
-    assert.deepEqual(hard, [], `ungrounded numbers in reply: ${hard.join(', ')};\ncalls: ${trace}\nreply: ${out.reply}`);
+    assert.deepEqual(bad, [], `ungrounded numbers in reply: ${bad.join(', ')};\ncalls: ${trace}\nreply: ${out.reply}`);
   });
 }
