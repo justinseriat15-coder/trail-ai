@@ -1,0 +1,25 @@
+name: eval-grounding
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'lib/coach*'
+      - 'lib/agent.js'
+      - 'tests/eval-grounding.test.js'
+      - 'tests/eval-grounding-questions.mjs'
+      - '.github/workflows/eval-grounding.yml'
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --no-audit --no-fund
+      - name: Strict grounding gate (15 questions, Sonnet 5.5)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVAL_COST_CAP_USD: '2'
+        run: node --test tests/eval-grounding.test.js
