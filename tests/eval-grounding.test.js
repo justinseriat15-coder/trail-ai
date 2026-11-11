@@ -23,8 +23,8 @@ import assert from 'node:assert/strict';
 import Anthropic from '@anthropic-ai/sdk';
 import { runCoachAgent } from '../lib/agent.js';
 import { buildSystemPrompt } from '../lib/coach.js';
-import { demoActivities } from '../public/js/demo-data.js';
-import { GROUNDING_QUESTIONS } from './eval-grounding-questions.mjs';
+import { demoActivities, demoActivitiesLowVolume } from '../public/js/demo-data.js';
+import { GROUNDING_QUESTIONS, LOW_VOLUME_QUESTIONS } from './eval-grounding-questions.mjs';
 
 const KEY = process.env.ANTHROPIC_API_KEY;
 const opts = { skip: !KEY };
@@ -88,7 +88,11 @@ function calendarNumbers(text) {
   const out = new Set();
   const add = (v) => { if (v != null) out.add(Number(v)); };
   for (const m of t.matchAll(/(\d{4})-(\d{2})-(\d{2})/g)) { add(m[1]); add(m[2]); add(m[3]); }
-  for (const m of t.matchAll(/(?<!\d)(\d{2})-(\d{2})(?!\d)/g)) { add(m[1]); add(m[2]); } // MM-DD
+  // MM-DD dates only: a valid month and day, and not a quantity range.
+  // "60-70 km/week" or "143-148 bpm" are TWO data claims, not a date -
+  // treating hyphenated ranges as calendar numbers let an invented
+  // "60-70 km/week" pass ungrounded in production on 2026-11-11.
+  for (const m of t.matchAll(/(?<!\d)(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?!\d)(?!\s*(?:km|m|min|bpm|h|%|\/))/g)) { add(m[1]); add(m[2]); } // MM-DD
   // Month name followed by a day list: "Sept 7, 14, 21 and 28", "Aug 5-11".
   for (const m of t.matchAll(new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+((?:\\d{1,2}\\s*(?:,|\\u2013|-|and)?\\s*)+)`, 'gi'))) {
     for (const d of m[1].matchAll(/\d{1,2}/g)) add(d[0]);
@@ -169,17 +173,54 @@ export function ungroundedNumbers(reply, corpusValues, { exemptTail = true } = {
 
 // --- the gate ------------------------------------------------------------
 
-const activities = demoActivities();
-const ctx = {
-  mode: 'demo', owner: false,
-  athlete: { firstname: 'Demo athlete' },
-  profile: { hrMax: 196, hrRest: 48 },
-  activities,
-};
-const system = buildSystemPrompt(ctx);
+// Two gated fixtures: the public demo athlete, and the low-volume synthetic
+// athlete from the 2026-11-11 live grounding miss (invented "current 60-70
+// km/week" on a light-month question). Both run the same strict assertions.
+const FIXTURES = [
+  {
+    tag: 'demo',
+    questions: GROUNDING_QUESTIONS,
+    ctx: {
+      mode: 'demo', owner: false,
+      athlete: { firstname: 'Demo athlete' },
+      profile: { hrMax: 196, hrRest: 48 },
+      activities: demoActivities(),
+    },
+  },
+  {
+    tag: 'low-volume',
+    questions: LOW_VOLUME_QUESTIONS,
+    ctx: {
+      mode: 'demo', owner: false,
+      athlete: { firstname: 'Demo athlete' },
+      profile: { hrMax: 192, hrRest: 52 },
+      activities: demoActivitiesLowVolume(),
+    },
+  },
+  {
+    // Regression for the 2026-11-11 live miss: owner-mode prompt carrying a
+    // STALE synthetic private context ("60-70 km per week") over a low-volume
+    // athlete. The gate must fail any reply quoting the stale figure, because
+    // the corpus no longer admits private-context numbers. Synthetic text
+    // only - the owner's real context never enters the repo or CI logs.
+    tag: 'low-volume-stale-context',
+    questions: LOW_VOLUME_QUESTIONS,
+    staleContext: 'Background from the April build: building 60-70 km per week toward the Guerande 60 km in June. Old knee niggle on long descents. Goal: finish under 9 h.',
+    ctx: {
+      mode: 'live', owner: true,
+      athlete: { firstname: 'Demo athlete' },
+      profile: { hrMax: 192, hrRest: 52 },
+      activities: demoActivitiesLowVolume(),
+    },
+  },
+];
 
-for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS) {
-  test(`grounding [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
+for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
+  if (staleContext) process.env.ATHLETE_CONTEXT = staleContext;
+  const system = buildSystemPrompt(ctx);
+  if (staleContext) delete process.env.ATHLETE_CONTEXT;
+  for (const { q, tools, allowNone = false, period = null } of questions) {
+  test(`grounding(${tag}) [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
     const client = new Anthropic({ apiKey: KEY });
     if (costBudget.spent >= COST_CAP) {
       assert.fail(`cost cap $${COST_CAP} already reached ($${costBudget.spent.toFixed(4)}); refusing further paid calls`);
@@ -219,7 +260,12 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
     // via the calendar-date exemption), and numbers that appear in the corpus
     // only inside date strings (a '03' in 2026-09-03 must not ground a
     // fabricated '3 sessions').
-    const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')));
+    // Athlete private context is background that may be stale: its numbers
+    // must never ground a reply. Excluded from the corpus like the BASE text -
+    // a stale "60-70 km/week" there grounded the exact live miss of
+    // 2026-11-11, because the section sits inside the data sections.
+    const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')))
+      .replace(/## Athlete private context[\s\S]*?(?=\n## |$)/, '');
     const dataCal = calendarNumbers(dataSections);
     const corpus = numbersOf(dataSections).filter((n) => !dataCal.has(n));
     // Metric DEFINITIONS and tool-description constants (the 50 m+/3% climb
@@ -263,4 +309,5 @@ for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS
     const trace = out.steps.map((s) => `${s.tool}(${JSON.stringify(s.input)}) -> ${JSON.stringify(s.output)?.slice(0, 300)}`).join('\n');
     assert.deepEqual(bad, [], `ungrounded numbers in reply: ${bad.join(', ')};\ncalls: ${trace}\nreply: ${out.reply}`);
   });
+  }
 }

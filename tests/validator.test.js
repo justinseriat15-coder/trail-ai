@@ -114,3 +114,23 @@ test('zone labels are labels, not data claims; figures around them still checked
   const range = ungroundedNumbers('68.8% of time in Z1-Z2.', [68.8]);
   assert.deepEqual(range, []);
 });
+
+test('CAUGHT: invented current-volume comparison on a low-volume athlete', () => {
+  // Pins the 2026-11-11 production miss: asked about a light August, the live
+  // coach wrote "nowhere near your current 60-70 km/week" when no week in the
+  // data reaches 60 km. Against a low-volume corpus, 60 and 70 must flag.
+  const lowVolumeCorpus = [196, 48, 21.2, 509, 125, 7, 4.1, 3.6, 6.5, 38.3, 39.5, 56.0, 27.7, 3.4, 45];
+  const bad = ungroundedNumbers('Running volume was very low. It was nowhere near your current 60-70 km/week.', lowVolumeCorpus);
+  assert.deepEqual(bad, [60, 70]);
+  const good = ungroundedNumbers('Running volume was very low next to your current 38.3 km week.', lowVolumeCorpus);
+  assert.deepEqual(good, []);
+});
+
+test('UNCAUGHT: speculative causes are textual - only their numbers are gated', () => {
+  // "or to eating less than 2 h before running": the checker can flag the 2
+  // if ungrounded, but the speculation itself is wording, not a number. This
+  // stays a documented gap; the prompt rule against inventing causes is the
+  // mitigation, and human review of failures remains part of the gate.
+  const bad = ungroundedNumbers('That points to lower fitness then, or to eating less than 2 h before running.', [158, 135]);
+  assert.deepEqual(bad, [2]);
+});
