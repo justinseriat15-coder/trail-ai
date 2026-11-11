@@ -67,6 +67,7 @@ test('prompt rules: context is background, data wins; no unsupported causes', ()
   assert.match(prompt, /never quote it as a current figure/i);
   assert.match(prompt, /conflicts with the data, the data wins/i);
   assert.match(prompt, /Never state a cause the data does not show/);
+  assert.ok(!/label any other explanation/.test(prompt), 'no guess escape hatch');
 });
 
 test('athlete private context is labelled background, may be stale', () => {
