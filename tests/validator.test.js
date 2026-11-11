@@ -77,3 +77,26 @@ test('billing/credit failures pause the coach cleanly, never an error', () => {
   assert.ok(src.includes("{ type: 'paused', text: COACH_PAUSED }"), 'SSE paused event');
   assert.ok(src.includes('json(res, 200, { paused: true, reply: COACH_PAUSED, model })'), 'JSON paused reply');
 });
+
+// --- hard eval cost cap: the stop lands BEFORE the expense ---
+
+test('cost cap: no paid call starts when the measured worst case exceeds the cap', async () => {
+  const { runCoachAgent } = await import('../lib/agent.js');
+  let paidCalls = 0;
+  const fakeClient = {
+    messages: {
+      countTokens: async () => ({ input_tokens: 50000 }), // measured, not assumed
+      create: async () => { paidCalls++; throw new Error('must never be called'); },
+    },
+  };
+  const ctx = { mode: 'demo', owner: false, athlete: {}, profile: {}, activities: [] };
+  await assert.rejects(
+    runCoachAgent({
+      client: fakeClient, model: 'claude-sonnet-5-5', system: 's',
+      messages: [{ role: 'user', content: 'q' }], ctx,
+      costBudget: { spent: 1.90, capUsd: 2.0, priceIn: 2e-6, priceOut: 10e-6 },
+    }),
+    (e) => e.code === 'EVAL_COST_CAP',
+  );
+  assert.equal(paidCalls, 0, 'no paid call may start once the cap cannot fit its worst case');
+});

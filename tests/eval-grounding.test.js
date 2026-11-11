@@ -33,14 +33,14 @@ const opts = { skip: !KEY };
 // Prices in $/token, from https://platform.claude.com/docs/en/about-claude/pricing
 // (Claude Sonnet 5.5: $2/MTok input, $0.10/MTok cache read, $10/MTok output).
 const PRICES = { 'claude-sonnet-5-5': { in: 2e-6, cache: 0.1e-6, out: 10e-6 } };
+// Hard per-run cap at Sonnet 5.5 rates ($2/MTok input, $10/MTok output).
+// Enforced inside the agent loop BEFORE every paid call: the exact request
+// input is measured with the free token-count endpoint, priced uncached, plus
+// that call's full max_tokens output; the call only starts if the measured
+// worst case fits the remaining cap. There is no assumed input size.
 const COST_CAP = Number(process.env.EVAL_COST_CAP_USD ?? '2.00');
-let spent = 0;
-// Pre-call enforcement: a question may start only if the cap still holds even
-// when that question burns its absolute worst case - 8 model calls (MAX_CALLS,
-// incl. token-starvation retries) at the 8192-token output cap and a generous
-// 32k-token uncached input each. Cache reads are 20x cheaper, so real runs sit
-// far below; this bound is what the cap actually guarantees.
-const WORST_CASE_PER_QUESTION = 8 * (32000 * 2e-6 + 8192 * 10e-6); // ~$1.17 at Sonnet 5.5 rates
+const costBudget = { spent: 0, capUsd: COST_CAP, priceIn: 2e-6, priceOut: 10e-6 };
+let spent = 0; // mirror for reporting; costBudget.spent is the enforced value
 function costOf(model, u = {}) {
   const p = PRICES[model];
   if (!p) return 0; // unknown model: cost untracked, cap ineffective (warned in output)
@@ -175,19 +175,21 @@ const system = buildSystemPrompt(ctx);
 for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS) {
   test(`grounding [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
     const client = new Anthropic({ apiKey: KEY });
-    if (spent + WORST_CASE_PER_QUESTION > COST_CAP) {
-      assert.fail(`cost cap $${COST_CAP} would be exceeded by the worst case of another question (spent $${spent.toFixed(4)} + worst-case $${WORST_CASE_PER_QUESTION.toFixed(2)}); refusing further paid calls`);
+    if (costBudget.spent >= COST_CAP) {
+      assert.fail(`cost cap $${COST_CAP} already reached ($${costBudget.spent.toFixed(4)}); refusing further paid calls`);
     }
     const model = process.env.ANTHROPIC_DEMO_MODEL || 'claude-sonnet-5-5'; // same default as demo mode in api/chat.js
+    const before = costBudget.spent;
     const out = await runCoachAgent({
       client,
       model,
       system,
       messages: [{ role: 'user', content: q }],
       ctx,
+      costBudget,
     });
-    const qCost = costOf(model, out.usage);
-    spent += qCost;
+    const qCost = costBudget.spent - before;
+    spent = costBudget.spent;
     console.log(`eval-question cost: $${qCost.toFixed(4)} (run total $${spent.toFixed(4)} / cap $${COST_CAP}) - ${q.slice(0, 60)}`);
 
     // (a) tool behaviour
