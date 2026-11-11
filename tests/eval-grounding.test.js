@@ -203,11 +203,14 @@ const FIXTURES = [
     // athlete. The gate must fail any reply quoting the stale figure, because
     // the corpus no longer admits private-context numbers. Synthetic text
     // only - the owner's real context never enters the repo or CI logs.
+    // mode stays 'demo' so tools read ctx.activities deterministically; the private context is
+    // included because owner is true. In live mode the tools fetch via
+    // ctx.session, which does not exist under test.
     tag: 'low-volume-stale-context',
     questions: LOW_VOLUME_QUESTIONS,
     staleContext: 'Background from the April build: building 60-70 km per week toward the Guerande 60 km in June. Old knee niggle on long descents. Goal: finish under 9 h.',
     ctx: {
-      mode: 'live', owner: true,
+      mode: 'demo', owner: true,
       athlete: { firstname: 'Demo athlete' },
       profile: { hrMax: 192, hrRest: 52 },
       activities: demoActivitiesLowVolume(),
