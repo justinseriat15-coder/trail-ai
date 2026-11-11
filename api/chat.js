@@ -65,6 +65,23 @@ export default handler(['POST'], async (req, res) => {
     ? process.env.ANTHROPIC_DEMO_MODEL || 'claude-haiku-4-5-20251001'
     : process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
+  // Privacy-safe request metrics: token/latency aggregates only - never message
+  // content, athlete identity, or auth data. Powers real-mode cost evidence.
+  const logMetrics = (ok, startedAt, out, extra = {}) => {
+    const u = (out && out.usage) || {};
+    console.log('chat_metrics', JSON.stringify({
+      ok, mode: ctx.mode, model,
+      duration_ms: Date.now() - startedAt,
+      input_tokens: u.input_tokens, output_tokens: u.output_tokens,
+      cache_read_input_tokens: u.cache_read_input_tokens,
+      thinking_tokens: u.thinking_tokens,
+      steps: out && out.steps ? out.steps.length : 0,
+      reply_chars: out && typeof out.reply === 'string' ? out.reply.length : 0,
+      ...extra,
+    }));
+  };
+
+  const startedAt = Date.now();
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   if ((req.headers.accept || '').includes('text/event-stream')) {
@@ -78,9 +95,11 @@ export default handler(['POST'], async (req, res) => {
         onStep: (label) => send({ type: 'step', label }),
         onText: (t) => send({ type: 'delta', text: t }),
       });
+      logMetrics(true, startedAt, out);
       send({ type: 'reply', text: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
     } catch (e) {
       console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
+      logMetrics(false, startedAt, null, { error_type: e?.error?.error?.type || e?.name });
       send({ type: 'error', error: 'The AI coach is currently unavailable.' });
     }
     return res.end();
@@ -88,9 +107,11 @@ export default handler(['POST'], async (req, res) => {
 
   try {
     const out = await runCoachAgent({ client, model, system, messages, ctx });
+    logMetrics(true, startedAt, out);
     json(res, 200, { reply: out.reply, model, usage: out.usage, steps: out.steps.map((s) => s.label) });
   } catch (e) {
     console.error('Anthropic error', e?.status, e?.error?.error?.type || e?.name);
+    logMetrics(false, startedAt, null, { error_type: e?.error?.error?.type || e?.name });
     json(res, 502, { error: 'The AI coach is currently unavailable.' });
   }
 });
