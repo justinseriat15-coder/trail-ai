@@ -61,8 +61,10 @@ export default handler(['POST'], async (req, res) => {
   ctx.insights = await computeInsights(ctx).catch(() => null);
   const system = buildSystemPrompt(ctx, { activityId: body.activityId, streams, perActivity: ctx.insights?.perActivity });
 
+  // Demo and live share the model and agent settings (owner decision 2026-11-11:
+  // the public demo recruiters try must pass the same grounding bar as real mode).
   const model = ctx.mode === 'demo'
-    ? process.env.ANTHROPIC_DEMO_MODEL || 'claude-haiku-4-5-20251001'
+    ? process.env.ANTHROPIC_DEMO_MODEL || 'claude-sonnet-5-5'
     : process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
   // Privacy-safe request metrics: token/latency aggregates only - never message

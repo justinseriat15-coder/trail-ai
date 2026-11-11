@@ -26,6 +26,10 @@ export function buildGroundingQuestions(activities = demoActivities()) {
   const lastYearMonth = monthName(shift(newest, -370));                                          // same month, last year
   const beyondDate = shift(oldest, -14);                                                         // a specific date with no session
 
+  const keyOf = (label) => {
+    const d = new Date(`1 ${label} 12:00 UTC`);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  };
   return [
     // --- Answerable from the preloaded summary: no tool call expected ---
     // In-coverage questions: the preloaded summary suffices, so no tool call is
@@ -39,7 +43,7 @@ export function buildGroundingQuestions(activities = demoActivities()) {
     { q: 'What should I do tomorrow?', tools: ['compute_stats', 'list_activities'], allowNone: true },
 
     // --- In the data but outside the preloaded window: retrieval required ---
-    { q: `What did my training look like in ${inDataMonth}?`, tools: ['list_activities', 'compute_stats'] },
+    { q: `What did my training look like in ${inDataMonth}?`, tools: ['list_activities', 'compute_stats'], period: keyOf(inDataMonth) },
     { q: `How many sessions did I do in ${inDataMonth}?`, tools: ['list_activities', 'compute_stats'] },
     { q: `Compare my weekly volume this month with ${olderInDataMonth}.`, tools: ['list_activities', 'compute_stats'] },
     { q: 'How has my climbing speed changed over the last 12 weeks?', tools: ['compute_stats', 'list_activities'] },
@@ -48,6 +52,7 @@ export function buildGroundingQuestions(activities = demoActivities()) {
 
     // --- Outside the dataset entirely: must fetch, find nothing, and say so ---
     { q: `What did my training look like in ${beyondMonth}?`, tools: ['list_activities', 'compute_stats'] },
+    // No period marker here: a correct 'no data' answer legitimately cites the coverage boundary (e.g. 'history starts 2026-07').
     { q: `How many kilometres did I run in ${lastYearMonth}?`, tools: ['list_activities', 'compute_stats'] },
     { q: `Find my run from ${beyondDate} and tell me about it.`, tools: ['list_activities', 'get_activity_details'] },
     { q: `Compare my climbing in ${inDataMonth} with ${beyondMonth}.`, tools: ['list_activities', 'compute_stats'] },

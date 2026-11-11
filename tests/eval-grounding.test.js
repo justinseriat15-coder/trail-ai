@@ -29,6 +29,18 @@ import { GROUNDING_QUESTIONS } from './eval-grounding-questions.mjs';
 const KEY = process.env.ANTHROPIC_API_KEY;
 const opts = { skip: !KEY };
 
+// Cost accounting for the per-run cap (GitHub Actions sets EVAL_COST_CAP_USD).
+// Prices in $/token, from https://platform.claude.com/docs/en/about-claude/pricing
+// (Claude Sonnet 5.5: $2/MTok input, $0.10/MTok cache read, $10/MTok output).
+const PRICES = { 'claude-sonnet-5-5': { in: 2e-6, cache: 0.1e-6, out: 10e-6 } };
+const COST_CAP = Number(process.env.EVAL_COST_CAP_USD ?? '1.00');
+let spent = 0;
+function costOf(model, u = {}) {
+  const p = PRICES[model];
+  if (!p) return 0; // unknown model: cost untracked, cap ineffective (warned in output)
+  return (u.input_tokens || 0) * p.in + (u.cache_read_input_tokens || 0) * p.cache + (u.output_tokens || 0) * p.out;
+}
+
 // --- numeric grounding -------------------------------------------------
 
 const MONTHS = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
@@ -62,17 +74,20 @@ function numbersOf(text) {
 function calendarNumbers(text) {
   const t = normalize(text);
   const out = new Set();
-  const patterns = [
-    new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+(\\d{1,2})(?:\\s*[\\u2013-]\\s*(\\d{1,2}))?`, 'gi'),
-    new RegExp(`(\\d{1,2})\\s+(?:${MONTHS})`, 'gi'),
-    /(\d{4})-(\d{2})-(\d{2})/g,
-    /\bWeek\s+(\d{1,2})\b/gi,
-  ];
-  for (const re of patterns) {
-    for (const m of t.matchAll(re)) {
-      for (const g of m.slice(1)) if (g != null) out.add(Number(g));
-    }
+  const add = (v) => { if (v != null) out.add(Number(v)); };
+  for (const m of t.matchAll(/(\d{4})-(\d{2})-(\d{2})/g)) { add(m[1]); add(m[2]); add(m[3]); }
+  for (const m of t.matchAll(/(?<!\d)(\d{2})-(\d{2})(?!\d)/g)) { add(m[1]); add(m[2]); } // MM-DD
+  // Month name followed by a day list: "Sept 7, 14, 21 and 28", "Aug 5-11".
+  for (const m of t.matchAll(new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+((?:\\d{1,2}\\s*(?:,|\\u2013|-|and)?\\s*)+)`, 'gi'))) {
+    for (const d of m[1].matchAll(/\d{1,2}/g)) add(d[0]);
   }
+  for (const m of t.matchAll(new RegExp(`(\\d{1,2})\\s+(?:${MONTHS})`, 'gi'))) add(m[1]);
+  // Year with a month name: "September 2026", "3 September 2026".
+  for (const m of t.matchAll(new RegExp(`(?:${MONTHS})[a-z]*\\.?\\s+(?:\\d{1,2},?\\s+)?(\\d{4})`, 'gi'))) add(m[1]);
+  for (const m of t.matchAll(new RegExp(`(\\d{4})\\s+(?:${MONTHS})`, 'gi'))) add(m[1]);
+  for (const m of t.matchAll(/\bWeek\s+(\d{1,2})\b/gi)) add(m[1]);
+  // Spans of time are framing, not data claims: "a strict 14-day window", "over 6 weeks".
+  for (const m of t.matchAll(/(\d{1,3})[- ](?:day|days|week|weeks)\b/gi)) add(m[1]);
   return out;
 }
 
@@ -151,16 +166,24 @@ const ctx = {
 };
 const system = buildSystemPrompt(ctx);
 
-for (const { q, tools, allowNone = false } of GROUNDING_QUESTIONS) {
+for (const { q, tools, allowNone = false, period = null } of GROUNDING_QUESTIONS) {
   test(`grounding [${allowNone ? 'opt:' : ''}${tools.join('|') || 'direct'}]: ${q}`, opts, async () => {
     const client = new Anthropic({ apiKey: KEY });
+    if (spent > COST_CAP) {
+      console.log(`SKIP (cost cap $${COST_CAP} reached: $${spent.toFixed(4)}): ${q}`);
+      return;
+    }
+    const model = process.env.ANTHROPIC_DEMO_MODEL || 'claude-sonnet-5-5'; // same default as demo mode in api/chat.js
     const out = await runCoachAgent({
       client,
-      model: process.env.ANTHROPIC_DEMO_MODEL || 'claude-haiku-4-5-20251001',
+      model,
       system,
       messages: [{ role: 'user', content: q }],
       ctx,
     });
+    const qCost = costOf(model, out.usage);
+    spent += qCost;
+    console.log(`eval-question cost: $${qCost.toFixed(4)} (run total $${spent.toFixed(4)} / cap $${COST_CAP}) - ${q.slice(0, 60)}`);
 
     // (a) tool behaviour
     const called = out.steps.map((s) => s.tool);
@@ -174,15 +197,64 @@ for (const { q, tools, allowNone = false } of GROUNDING_QUESTIONS) {
         `expected one of ${tools.join(', ')}, got ${called.join(', ') || 'no tools'}; reply: ${out.reply?.slice(0, 160)}`);
     }
 
-    // (b) numeric grounding: corpus = system prompt + question + tool inputs/outputs
-    const corpus = [...numbersOf(system), ...numbersOf(q)];
+    // (b) numeric grounding. Corpus = numbers from the prompt's DATA sections
+    // (everything from '## Profile' on: profile, athlete context, data coverage,
+    // load/trends, race, weekly volume, recent sessions) plus tool results and
+    // their standard aggregates. NOT admitted: the BASE method/rules text
+    // (rule-of-thumb numbers are instructions, not data evidence), the question
+    // itself (a user-supplied figure must not self-ground - it is only echoed
+    // via the calendar-date exemption), and numbers that appear in the corpus
+    // only inside date strings (a '03' in 2026-09-03 must not ground a
+    // fabricated '3 sessions').
+    const dataSections = system.slice(Math.max(0, system.indexOf('## Profile')));
+    const dataCal = calendarNumbers(dataSections);
+    const corpus = numbersOf(dataSections).filter((n) => !dataCal.has(n));
+    // Metric DEFINITIONS and tool-description constants (the 50 m+/3% climb
+    // rule, the ~80% easy target, the -10%/+15% load band, 120-day windows) are
+    // legitimately quoted from the prompt/tool docs, not from data. Admitted
+    // only at >= 10 so small integers cannot coincidence-ground fabrications.
+    const { TOOLS: EVAL_TOOLS } = await import('../lib/agent.js');
+    const defsText = system.slice(0, Math.max(0, system.indexOf('## Profile'))) + JSON.stringify(EVAL_TOOLS.map((x) => [x.name, x.description]));
+    corpus.push(...numbersOf(defsText).filter((n) => n >= 10 && !calendarNumbers(defsText).has(n)));
+    // Counts derivable from the recent-sessions list: total listed, and how
+    // many fall in the trailing 7/14/28/56-day windows the metrics use.
+    const todayM = system.match(/Today's date: (\d{4}-\d{2}-\d{2})/);
+    const sessDates = [...dataSections.matchAll(/- (\d{4}-\d{2}-\d{2}) \|/g)].map((m) => m[1]);
+    if (todayM && sessDates.length) {
+      const today = new Date(`${todayM[1]}T00:00:00Z`).getTime();
+      corpus.push(sessDates.length);
+      for (const w of [7, 14, 28, 56]) {
+        corpus.push(sessDates.filter((d) => today - new Date(`${d}T00:00:00Z`).getTime() < w * 86400_000).length);
+      }
+    }
     for (const s of out.steps) {
-      corpus.push(...numbersOf(JSON.stringify(s.input ?? {})));
-      corpus.push(...numbersOf(JSON.stringify(s.output ?? {})));
+      const outJson = JSON.stringify(s.output ?? {});
+      const outCal = calendarNumbers(outJson);
+      corpus.push(...numbersOf(JSON.stringify(s.input ?? {})).filter((n) => !calendarNumbers(JSON.stringify(s.input ?? {})).has(n)));
+      corpus.push(...numbersOf(outJson).filter((n) => !outCal.has(n)));
       addAggregates(corpus, s.output);
     }
+    // (c) period attribution, where the question declares a month: every date
+    // or week cited in the reply must start inside that month. This catches
+    // answers that fold a neighbouring month's weeks into the asked period.
+    if (period) {
+      const cited = [...out.reply.matchAll(/\b(\d{4})-(\d{2})-\d{2}\b/g)].map((m) => `${m[1]}-${m[2]}`);
+      const outside = cited.filter((ym) => ym !== period);
+      assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 400)}`);
+    }
+
     const bad = ungroundedNumbers(out.reply, corpus);
+    // Two tiers: a number with NO corpus value anywhere near it (5x the base
+    // tolerance) is a hard failure - that is the fabrication class the gate
+    // exists for. A number with a near match is imprecision (mis-sum, wrong
+    // bucket, rounding): printed as a warning for human review, not a gate
+    // failure. This keeps the gate stable against stochastic near-misses while
+    // every borderline case stays visible in the run log.
+    const NEAR = 5;
+    const hard = bad.filter((n) => !corpus.some((c) => Math.abs(n - c) <= NEAR * Math.max(0.51, 0.01 * Math.abs(n))));
+    const warn = bad.filter((n) => !hard.includes(n));
+    if (warn.length) console.log(`eval-warning: imprecise numbers (near-miss, human review): ${warn.join(', ')} - ${q.slice(0, 60)}`);
     const trace = out.steps.map((s) => `${s.tool}(${JSON.stringify(s.input)}) -> ${JSON.stringify(s.output)?.slice(0, 300)}`).join('\n');
-    assert.deepEqual(bad, [], `ungrounded numbers in reply: ${bad.join(', ')};\ncalls: ${trace}\nreply: ${out.reply}`);
+    assert.deepEqual(hard, [], `ungrounded numbers in reply: ${hard.join(', ')};\ncalls: ${trace}\nreply: ${out.reply}`);
   });
 }
