@@ -38,7 +38,10 @@ const PRICES = { 'claude-sonnet-5-5': { in: 2e-6, cache: 0.1e-6, out: 10e-6 } };
 // input is measured with the free token-count endpoint, priced uncached, plus
 // that call's full max_tokens output; the call only starts if the measured
 // worst case fits the remaining cap. There is no assumed input size.
-const COST_CAP = Number(process.env.EVAL_COST_CAP_USD ?? '2.00');
+import { EVAL_BUDGET_CAP_USD } from './eval-budget.mjs';
+// The workflow env var is a hard ceiling; the checked-in budget can only
+// tighten it (see tests/eval-budget.mjs). Effective cap is the lower of both.
+const COST_CAP = Math.min(Number(process.env.EVAL_COST_CAP_USD ?? '2.00'), EVAL_BUDGET_CAP_USD ?? Infinity);
 const costBudget = { spent: 0, capUsd: COST_CAP, priceIn: 2e-6, priceOut: 10e-6 };
 let spent = 0; // mirror for reporting; costBudget.spent is the enforced value
 function costOf(model, u = {}) {
