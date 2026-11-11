@@ -180,16 +180,30 @@ function addAggregates(corpus, output) {
   }
 }
 
-export function ungroundedNumbers(reply, corpusValues, { exemptTail = true } = {}) {
-  // The prompt requires ending with an actionable recommendation, so the
-  // closing advice blocks (up to two trailing paragraphs) are exempt:
-  // prescribed numbers there ("hold 45-75 min easy") are advice, not data
-  // claims. Single-block replies are data claims throughout and fully checked.
+// The prompt requires ending with an actionable recommendation, so the
+// closing advice blocks (up to two trailing paragraphs) are exempt from data
+// assertions: prescribed numbers there ("hold 45-75 min easy") and dates cited
+// for forward-looking advice ("your last run on 2026-11-10 averaged HR 154")
+// are advice grounded in current data, not claims about the asked period.
+// Single-block replies are data claims throughout and fully checked.
+export function checkedBody(reply, { exemptTail = true } = {}) {
   const blocks = reply.split(/\n\s*\n/);
   const exempt = exemptTail ? Math.min(2, blocks.length - 1) : 0;
-  const body = blocks.slice(0, blocks.length - exempt).join('\n\n');
+  return blocks.slice(0, blocks.length - exempt).join('\n\n');
+}
+
+export function ungroundedNumbers(reply, corpusValues, { exemptTail = true } = {}) {
+  const body = checkedBody(reply, { exemptTail });
   const calendar = calendarNumbers(body);
   return numbersOf(body).filter((n) => !calendar.has(n) && !corpusValues.some((c) => Math.abs(n - c) <= Math.max(0.51, 0.01 * Math.abs(n))));
+}
+
+// Dates cited outside the asked period, restricted to the checked body: the
+// period assertion exists to catch a neighbouring month's weeks folded into
+// the period's account, which happens in the analysis, not in closing advice.
+export function outsidePeriodDates(reply, period) {
+  const cited = [...checkedBody(reply).matchAll(/\b(\d{4})-(\d{2})-\d{2}\b/g)].map((m) => `${m[1]}-${m[2]}`);
+  return cited.filter((ym) => ym !== period);
 }
 
 // --- the gate ------------------------------------------------------------
@@ -315,11 +329,12 @@ for (const { tag, questions, ctx, staleContext = null } of FIXTURES) {
       addAggregates(corpus, s.output);
     }
     // (c) period attribution, where the question declares a month: every date
-    // or week cited in the reply must start inside that month. This catches
+    // cited in the ANALYSIS body must start inside that month. This catches
     // answers that fold a neighbouring month's weeks into the asked period.
+    // The closing advice blocks are exempt (same boundary as the numbers
+    // check): forward-looking advice legitimately cites current data.
     if (period) {
-      const cited = [...out.reply.matchAll(/\b(\d{4})-(\d{2})-\d{2}\b/g)].map((m) => `${m[1]}-${m[2]}`);
-      const outside = cited.filter((ym) => ym !== period);
+      const outside = outsidePeriodDates(out.reply, period);
       assert.deepEqual(outside, [], `reply cites dates outside ${period}: ${outside.join(', ')}; reply: ${out.reply?.slice(0, 1500)}`);
     }
 

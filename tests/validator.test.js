@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ungroundedNumbers, numbersOf, stripCalendar } from './eval-grounding.test.js';
+import { ungroundedNumbers, numbersOf, stripCalendar, outsidePeriodDates } from './eval-grounding.test.js';
 
 // A corpus as the eval builds it: data-section numbers + tool results,
 // calendar-date numbers already excluded (see eval-grounding.test.js).
@@ -162,4 +162,26 @@ test('corpus building: date digits alone still cannot ground a fabrication', () 
   assert.ok(!corpus.includes(3), 'day 03 of a date must not enter the corpus');
   const bad = ungroundedNumbers('You did 3 sessions that week, totalling 8.2 km.', corpus);
   assert.deepEqual(bad, [3]);
+});
+
+test('period assertion: closing advice may cite current data, analysis may not fold periods', () => {
+  // CI run 43014738961 (2026-11-11): a correct thin-July answer failed because
+  // its closing recommendation cited the athlete's actual last run
+  // (2026-11-10, HR 154). Forward-looking advice grounded in current data is
+  // not a claim about July - the assertion checks the analysis body only.
+  const good = [
+    'The data for July 2026 is thin: only 2026-07-28 and 2026-07-31 are recorded, 7.4 km in total.',
+    '',
+    'For your next session, keep HR under 149: your last run on 2026-11-10 averaged 154.',
+  ].join('\n');
+  assert.deepEqual(outsidePeriodDates(good, '2026-07'), []);
+  // The defect class stays caught: August weeks folded into a July account.
+  const bad = [
+    'July had 4 sessions: 2026-07-28, 2026-07-31, and the stronger 2026-08-05 and 2026-08-12 weeks.',
+    '',
+    'Next session: keep it easy.',
+  ].join('\n');
+  assert.deepEqual(outsidePeriodDates(bad, '2026-07'), ['2026-08', '2026-08']);
+  // Single-block replies are fully checked, advice or not.
+  assert.deepEqual(outsidePeriodDates('July was thin; your run on 2026-11-10 averaged 154.', '2026-07'), ['2026-11']);
 });
